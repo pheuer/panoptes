@@ -16,6 +16,6 @@ setuptools.setup(
         "Bug Tracker": "https://github.com/pheuer/panoptes/issues"
     },
     license='MIT',
-    packages=['cr39py'],
-    install_requires=['numpy', 'h5py', 'scipy', 'matplotlib', 'astropy'],
+    packages=['panoptes'],
+    install_requires=['numpy', 'h5py', 'scipy', 'matplotlib', 'astropy', 'CR39py'],
 )
