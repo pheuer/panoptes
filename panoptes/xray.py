@@ -36,22 +36,13 @@ from panoptes.pinholes import PinholeArray
         
 class XrayIP:
     
-    kodi_analysis_dir = os.path.join('//expdiv','kodi','ShotAnalysis')
-    kodi_data_dir = os.path.join('//expdiv','kodi','ShotData')
-
     def __init__(self, *args, data_dir=None, pinhole_array=None, dxpx=None,
-                 subregion=None):
+                 subregion=None, h4toh5convert_path=None):
         """
         arg : path or int
         
             Either a shot number or a filepath directly to the data file
         """
-        
-        if data_dir is None:
-            self.data_dir = self.kodi_data_dir
-        else:
-            self.data_dir = data_dir
-        
         
         self.figax = None
         self.penumbra = None
@@ -65,16 +56,19 @@ class XrayIP:
             
         # If the first argument is a file path, load the file directly
         # if not, assume it is a shot number and look for it 
-
         if isinstance(args[0], str):
             self.path = args[0]
         else:
+            if data_dir is None:
+                raise ValueError("The 'data_dir' keyword is required in order "
+                                 "to locate a file based on a shot number.")
+            
             self.path = self._find_data(args[0])
             
 
         
     
-        self._load_xray(self.path)
+        self._load_xray(self.path, h4toh5convert_path=h4toh5convert_path)
         
         
         if self.subregion is not None:
@@ -97,10 +91,13 @@ class XrayIP:
         return path
                 
     
-    def _load_xray(self, path, dxpx=None):
+    def _load_xray(self, path, dxpx=None, h4toh5convert_path=None):
         
         # Ensure hdf5
-        path = ensure_hdf5(path)
+        if h4toh5convert_path is not None:
+            path = ensure_hdf5(path, h4toh5convert_path=h4toh5convert_path)
+        else:
+            raise ValueError("Keyword 'h4toh5convert_path' is required")
         
         print("Loading Xray data")
         with h5py.File(path, 'r') as f:
@@ -218,10 +215,13 @@ class XrayIP:
 if __name__ == '__main__':
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
+    
+    h4toh5convert_path = os.path.join('C:\\','Program Files','HDF_Group','H4H5','2.2.5','bin', 'h4toh5convert.exe')
+    
     obj = XrayIP(103955, pinhole_array='D-PF-C-055_A', 
                  data_dir=data_dir,
                  subregion = [(0.23, 9.6), (5.1, 0.1)],
-                 
+                 h4toh5convert_path=h4toh5convert_path,
                  )
     obj.fit_pinholes(rough_adjust={'dx':-0.2, 'dy':-0.3, 'mag_s':35.5, 'rot':-17},
                      auto_select_apertures=True,)
