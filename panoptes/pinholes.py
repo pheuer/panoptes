@@ -276,7 +276,7 @@ class PinholeArray:
         print("enter 'help' for a list of commands")
         self.plot_with_data(xaxis, yaxis, data)
         
-        for i in range(1000):
+        while True:
             state_str = ', '.join([f"{k}:{v}" for k,v in state.items()])
             print(f"Current state: {state_str}")
             x = input(">")
