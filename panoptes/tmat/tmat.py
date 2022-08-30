@@ -5,8 +5,11 @@ import h5py
 import numpy as np
 
 
-def calc_tmat(xo, yo, dxo, xi, yi, dxi, mag_r,  xy_ap):
-    pass
+from numba import njit, prange
+    
+    
+    
+
 
 
 
@@ -30,17 +33,9 @@ class TransferMatrix:
         xo, yo : 1D np.ndarray
             Axes for each dimension of the transfer matrix in the object plane.
             Normalized to R_ap
-            
-        dxo : float
-            Point separation in the object plane.
-            Normalized to R_ap
-            
+             
         xi, yi : 1D np.ndarray
             Axes for each dimension of the transfer matrix in the image plane.
-            Normalized to R_ap*mag_r
-            
-        dxi : float
-            Point separation in the image plane.
             Normalized to R_ap*mag_r
             
             
@@ -49,9 +44,12 @@ class TransferMatrix:
             The pinhole magnification L2/L1 = mag_r -1 is available as the
             attribute `mag_p`
             
-        xy_ap : np.ndarray (N_ap, 2)
+        ap_xy : np.ndarray (N_ap, 2)
             The locations of the aperture centers in the pinhole plane.
-            Normalize to R_ap (??)
+            Normalize to R_ap.
+            
+        psf : np.ndarray 
+            The point-spread function for a single aperture. 
             
             
         Calculated Transfer Matrix
@@ -90,12 +88,12 @@ class TransferMatrix:
         # if no subset is set, _xo = xo etc.
         self._xo = None
         self._yo = None
-        self.dxo = None
         self._xi = None
         self._yi = None
-        self.dxi = None
         self.mag_r = None
-        self.xy_ap = None
+        self.ap_xy = None
+        self.psf = None
+        self.psf_ax = None
         
         # Tmat
         # tmat is also a private attribute because the public version includes
@@ -134,22 +132,37 @@ class TransferMatrix:
     def mag_p(self): 
         return self.mag_r - 1
     
+    
+    def save(self, path):
+        self.save_constants(path)
+        self.save_tmat(path)
+        self.save_dimensions(path)
+        
+        
+    def load(self, path):
+        self.load_constants(path)
+        self.load_tmat(path)
+        self.load_dimensions(path)
+        
+
+    
 
         
-    def set_constants(self, xo, yo, dxo, xi, yi, dxi, mag_r, xy_ap):
+    def set_constants(self, xo, yo, xi, yi, mag_r, ap_xy, 
+                      psf=None, psf_ax=None):
         """
         Set the constants that define the transfer matrix. 
         """
-        
-        
         self._xo = xo
         self._yo = yo
-        self.dxo = dxo
         self._xi = xi
         self._yi = yi
-        self.dxi = dxi
         self.mag_r = mag_r
-        self.xy_ap = xy_ap
+        self.ap_xy = ap_xy
+        
+        self.psf = psf
+        self.psf_ax = psf_ax
+
         
     def save_constants(self, path):
         with h5py.File(path, 'w') as f:
@@ -157,10 +170,11 @@ class TransferMatrix:
             f['yo'] = self._yo
             f['xi'] = self._xi
             f['yi'] = self._yi
-            f['dxo'] = self.dxo
-            f['dxi'] = self.dxi
             f['mag_r'] = self.mag_r
-            f['xy_ap'] = self.xy_ap
+            f['ap_xy'] = self.ap_xy
+            f['psf'] = self.psf
+            f['psf_ax'] = self.psf_ax
+            
             
     def load_constants(self, path):
         with h5py.File(path, 'r') as f:
@@ -168,13 +182,15 @@ class TransferMatrix:
             self._yo = f['yo'][...]
             self._xi = f['xi'][...]
             self._yi = f['yi'][...]
-            self.dxo = f['dxo']
-            self.dxi = f['dxi']
             self.mag_r = f['mag_r']
-            self.xy_ap = f['xy_ap'][...]    
-            
+            self.ap_xy = f['ap_xy'][...]  
+            self.psf = f['psf'][:]
+            self.psf_ax = f['psf_ax'][:]            
     
     def save_tmat(self, path):
+        
+        # TODO: chunk this as chunks of object plane together
+        
         with h5py.File(path, 'w') as f: 
             f['tmat'] = self._tmat
             
@@ -334,4 +350,117 @@ class TransferMatrix:
     def tmat(self):
             return self._tmat[self.xi_slice, self.yi_slice, 
                               self.xo_slice, self.yo_slice]
+        
+        
+        
+    def calc_tmat(self):
+        """
+        Calculates the transfer matrix based on the set constants.
+
+        """
+        
+        # Save the sizes 
+        nxo = self._xo.size
+        nyo = self._yo.size
+        nxi = self._xi.size
+        nyi = self._yi.size
+        
+        # Create 2D arrays
+        xo, yo = np.meshgrid(self._xo, self._yo, indexing='ij')
+        xi, yi = np.meshgrid(self._xi, self._yi, indexing='ij')
+        xo = xo.flatten()
+        yo = yo.flatten()
+        xi = xi.flatten()
+        yi = yi.flatten()
+        
+        # Run the numba-fied parallel loop to do the computation
+        tmat = _calc_tmat_numba(xo, yo, xi, yi, 
+                                mag_r, 
+                                self.ap_xy, 
+                                self.psf, 
+                                self.psf_ax)
+        
+        self._tmat = np.reshape(tmat, [nxo, nyo, nxi, nyi])
+
+
+        
+@njit(parallel=True)
+def _calc_tmat_numba(xo, yo, xi, yi, mag_r, ap_xy, psf, psf_ax):
+    """
+    Numba-fied function to calculate a transfer matrix
+    
+    Parameters
+    ----------
+    """
+    
+    tmat = np.empty((xo.size, xi.size))
+    
+    # Do a parallel loop through all of the image plane pixels
+    for i in prange(xi.size): 
+        
+        # Do a serial loop over all object plane pixels for this image
+        # plane pixel
+        res = np.empty(xo.size)
+        for o in range(xo.size):
+    
+            # Compute the position of each point in the aperture plane
+            xa =  xi[i] + xo[o]*(mag_r-1)/mag_r
+            ya =  yi[i] + yo[o]*(mag_r-1)/mag_r
             
+            # Compute the distance from this point to every aperture
+            r = np.sqrt(  (xa - ap_xy[:,0])**2 + 
+                          (ya - ap_xy[:,1])**2
+                        )
+
+            # Store the distance to the nearest aperture
+            # NOTE: we are ignoring contributions from multiple pinholes for now
+            res[o] = np.min(r)
+            
+        # Interpolate the value of the transfer matrix at this point
+        # from the point spread function
+        tmat[:,i] = np.interp(res, psf_ax, psf)
+        
+    return tmat
+            
+
+
+
+
+
+
+if __name__ == '__main__':
+    isize=400
+    osize=81
+    
+    import numpy as np
+    import time
+    xo = np.linspace(-1, 1, num=osize)
+    yo=np.linspace(-1, 1, num=osize)
+    xi = np.linspace(-10,10, num=isize)
+    yi=np.linspace(-10,10, num=isize)
+    mag_r = 10
+    ap_xy = np.array([[0,0], [-4,0], [4, 0], [-6, 0], [6, 0], [2,4], [4,2]])
+    
+    psf = np.concatenate((np.ones(50), np.zeros(50)))
+    psf_ax = np.linspace(0, 2, num=100)
+    
+    
+    t = TransferMatrix()
+    
+    
+    t.set_constants(xo, yo, xi, yi, mag_r, ap_xy, psf=psf, psf_ax=psf_ax)
+    
+    t0 = time.time()
+    t.calc_tmat()
+    
+    print(f"Time: {time.time() - t0:.1f} sec")
+    
+    
+    print(t._tmat.shape)
+    
+    
+    import matplotlib.pyplot as plt
+    
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    ax.pcolormesh(t._tmat[20, 20, :, :].T)
