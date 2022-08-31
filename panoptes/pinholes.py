@@ -14,6 +14,8 @@ obj = XrayIP(103955, data_dir=data_dir, pinholes='D-PF-C-055_A')
 
 import numpy as np
 
+import h5py
+
 import astropy.units as u
 
 import matplotlib.pyplot as plt
@@ -99,7 +101,9 @@ class PinholeArray:
     
     def __init__(self, arg, plots=False):
         """
-        
+        arg : str
+            Either a path to a file from which the pinhole can be loaded 
+            or a pinhole array ID
         
         Notes
         -----
@@ -114,25 +118,25 @@ class PinholeArray:
      
         """
         
-        
-        
         self.plots = plots
         
         # First we will check to see if the pinhole is defined
         self._defined_pinhole(arg)
         
-        # TODO Make a save format for pinholes
         
         # If not, assume the argument is a path to a text file with
         # the pinhole info in it.
         
         
         # Indices of pinholes to use in analysis
-        self.use = np.ones(self.npinholes).astype(bool)
+        self.use_for_fit = np.ones(self.npinholes).astype(bool)
         
-        # Store the locations of the pinhole centers
+        # The locations of the pinhole centers
         # (determined by fitting each aperture image)
-        self.pinhole_centers = None
+        self.pinhole_centers = self.xy
+        
+        # Sto
+        self.mag_r = None
         
         # Optimal adjustment for the pinhole array
         self.adjustment = {'dx':0, 'dy':0, 'rot':0, 'mag_s':1, 
@@ -143,6 +147,11 @@ class PinholeArray:
             self.plot()
             
             
+    # *************************************************************************
+    # Basic methods
+    # *************************************************************************
+            
+            
     def __getattr__(self, key):
         if key in self.adjustment.keys():
             return self.adjustment[key]
@@ -150,8 +159,7 @@ class PinholeArray:
             print(list(self.adjustment.keys()))
             raise KeyError(f"PinholeArray has no attribute {key}")
             
-        
-        
+            
     def adjust(self, dx=0, dy=0, rot=0, mag_s=1,
                   skew=1, skew_angle=0,
                   hreflect=0, vreflect=0,
@@ -186,82 +194,243 @@ class PinholeArray:
                            'skew':skew, 'skew_angle':skew_angle,
                        'hreflect':hreflect, 'vreflect':vreflect}
         
-        
-    def _defined_pinhole(self, name):
-        self.name = name
-        
-        if name == 'D-PF-C-055_A':
-            # LLE 210x Ta array, 0.3 mm diameter, 0.6 mm spacing
-            self.spacing = 0.06 # cm, horiz separation
-            spacing_vert = self.spacing*np.cos(np.deg2rad(30)) #mm, 0.182 row separation
+       
+    # *************************************************************************
+    # Methods for loading and saving 
+    # *************************************************************************
             
-            # Define the number of pinholes per row
-            N_row = np.array([7, 10, 11, 12, 13, 14, 15, 16, 15, 16, 15, 14, 13, 12, 11, 10, 7])
-            # Create a cumulative array, starting with a zero, for indexing
-            ncum = np.cumsum(N_row)
-            nslice = np.concatenate((np.zeros(1), ncum)).astype(np.int32)
-            
-            self.npinholes = np.sum(N_row)
-            xy = np.zeros([self.npinholes,2])
+    def save(self, grp):
+        """
+        Save the data about this subset into an h5 group
+          
+        grp : h5py.Group or path string
+            The location to save the h5 data. This could be the root group
+            of its own h5 file, or a group within a larger h5 file.
+              
+            If a string is provided instead of a group, try to open it as
+            an h5 file and create the group there
+          
+        """
+        if isinstance(grp, str):
+            with h5py.File(grp, 'w') as f:
+                self._save(f)
+        else:
+            self._save(grp)
         
-            for i in range(N_row.size):#i = 1:length(N_row)
-                x_ind = np.arange(N_row[i]) - (N_row[i]-1)/2
-                y_ind = i - (N_row.size-1)/2
+          
                 
-                xloc = x_ind*self.spacing*np.ones(x_ind.size)
-                yloc = y_ind*spacing_vert*np.ones(x_ind.size)
-                xy[nslice[i]:nslice[i+1], :] = np.array([xloc, yloc]).T
+    def _save(self, grp):
+        """
+        See docstring for "save"
+        """
+        
+        # Write pinhole information
+        info_grp = grp['pinhole_info']
+        info_grp['id'] = self.id
+        info_grp['diameter'] = self.diameter.to(u.um).value
+        info_grp['diameter'].attrs['unit'] = 'um'
+        info_grp['material'] = self.material
+        info_grp['thickness'] = self.thickness.to(u.um).value
+        info_grp['thickness'].attrs['unit'] = 'um'
+        info_grp['xy_prime'] = self.xy_prime
+         
+        # Save the pinhole fit + selection parameters
+        adjustment_grp = grp['adjustment']
+        for val, key in self.adjustment:
+            adjustment_grp[key] = val
+            
+        grp['xy'] = self.xy
+        grp['use'] = self.use_for_fit
+        grp['pinhole_centers'] = self.pinhole_centers
+        
+        
+        if self.mag_r is not None: 
+            grp['mag_r'] = self.mag_r
 
-            # Remove 'blank' position
-            # index row/column to skip
-            # Both 1 indexed!
-            blanks = [ (5, 10) ] 
-            keep = np.ones(self.npinholes, dtype=bool)
-            for i, blank in enumerate(blanks):
-                row = blank[0]-1
-                ind = ncum[row] + blank[1]
-                keep[ind] = False
+    def load(self, grp):
+           """
+           Load a PinholeArray object from a file or hdf5 group
+           
+           grp : h5py.Group 
+               The location from which to load the h5 data. This could be the 
+               root group of its own h5 file, or a group within a larger h5 file.
+           
+           """
+           if isinstance(grp, str):
+               with h5py.File(grp, 'r') as f:
+                   self._load(f)
+           else:
+               self._load(grp)
                 
-            xy = xy[keep, :]
-            self.xy = xy
-            # Store a copy of the unchanged coordinates for reference
-            self.xy_prime = np.copy(xy) 
+                        
+    def _load(self, grp):
+        """
+        See documentation for 'load'
+        """
+        
+        # Load pinhole information
+        info_grp = grp['pinhole_info']
+        self.id = str(info_grp['id'])
+        self.diameter = info_grp['diameter'] * u.um
+        self.material = info_grp['material']
+        self.thickness = info_grp['thickness'] * u.um
+        self.xy_prime = info_grp['xy_prime'][...]
+        
+        
+        # Save the pinhole fit + selection parameters
+        adjustment_grp = grp['adjustment']
+        for val, key in self.adjustment:
+            self.adjustment[key] = adjustment_grp[key]
             
-            self.npinholes = np.sum(keep)
+        self.xy = grp['xy'][...] 
+        self.use_for_fit = grp['use'][...]
+        self.pinhole_centers = grp['pinhole_centers'][...]
+         
+         
+        if 'mag_r' in grp.keys():
+            self.mag_r = grp['mag_r']
+        else:
+            self.mag_r = None
             
-            self.diameter = 0.03*u.cm
-            self.material = 'Ta';
-            self.thickness = 0.02*u.cm
+            
+
+    
+        
+            
+        
+        
+    
+        
+    def _defined_pinhole(self, id):
+        """
+        Load data about a defined pinhole array from its id number
+        """
+        self.id = id
+        
+        self.xy, self.spacing, self.diameter, self.material, self.thickness = pinhole_array_info(id)
+        
+        self.npinholes = self.xy.shape[0]
+        
+        # Store a copy of the unchanged coordinates for reference
+        self.xy_prime = np.copy(self.xy) 
         
     
     def fit(self, xaxis, yaxis, data,
+                      # Rough adjustment 
+                      auto_rough_adjust = None,
                       rough_adjust=None,
+                      # Aperture selection
+                      use_apertures = None,
                       auto_select_apertures=False,
-                      fit_pinholes=None):
+                      # Aperture fitting
+                      aperture_model='penumbra',
+                      plots=True):
         
-        # Roughly adjust the pinhole array to the image manually
-        if rough_adjust is not None:
-            self.adjust(**rough_adjust)
-            self.plot_with_data(xaxis, yaxis, data)
+        """
+        Fits the pinhole array to data through a multiple step process.
+        
+        The fitting algorithm goes through the following steps. 
+        
+        1) Rough fit the pinhole array model to the data. The goal of this step
+           is just to get the centers close enough for the subsequent steps
+           of the analysis. 
+           
+        2) Select a subset of aperture images to fit individually to find
+           their centers. 
+           
+        3) Fit the aperture array model to the center locations found in
+           step (2). The resulting adjustment will be the best fit of the
+           aperture model to the selected apertures.
+        
+        The optional keywords allow different parts of the
+        routine to be programatically bypassed or configured.
+        
+        Parameters
+        ----------
+        
+        xaxis, yaxis : np.ndarray [nx] [ny]
+            The horizontal and vertical axes of the data
+            
+        data : np.ndarray [nx, ny]
+            The data to be fit
+            
+        rough_adjust : dict, optional
+            A dictionary containing a rough adjustment to fit the pinhole
+            array model to the data. The dictionary can contain the following
+            keys: dx, dy, rot, mag_s, skew, skew_angle, hreflect, vreflect
+            
+        auto_rough_adjust : bool, optional
+            If True, an automatic rough adjustment algorithm will be used.
+            If False (default) then user input or the `rough_adjust` keyword 
+            will be required.
+            
+        use_apertures : bool array [napertures,], optional
+            A boolean list or array indicating which apertures to include
+            in the fit. If False (default) apertures will be selected
+            automatically or with user input.
+            
+        auto_select_apertures : bool, optional
+            If True, automatically select the apertures for the fit and skip
+            asking for user input.
+            
+            
+        aperture_model : str, optional
+            The model with which to fit the aperture images to find their 
+            centers (and, if applicable for that model, other paramters like
+            the radius of a penumbral image). Default is 'penumbra'. Options
+            are:
+                - 'penumbra'
+                - 'pinhole_supergaussian' # Not yet implemented! 
+            
+            
+        plots : bool, optional
+            If True (default) show plots at each stage of the fitting process
+
+        
+        
+        """
+        # Perform rough adjustment
+        if auto_rough_adjust:
+            raise NotImplementedError("Automatic rough adjustment is not yet implemented")
         else:
-            self._rough_adjust(xaxis, yaxis, data)
+            # Roughly adjust the pinhole array to the image manually
+                if rough_adjust is not None:
+                    self.adjust(**rough_adjust)
+                else:
+                    self._manual_rough_adjust(xaxis, yaxis, data)
+                
+        if plots:
+            self.plot_with_data(xaxis, yaxis, data)
         
         # Select pinholes to include in the remainder of the analysis
-        self._select_apertures(xaxis, yaxis, data, 
-                               auto_select=auto_select_apertures)
+        if use_apertures is not None:
+            self.use_for_fit = np.array(use_apertures)
+        else:
+            if auto_select_apertures:
+                self._auto_select_apertures_to_fit(xaxis, yaxis, data)
+            else:
+                self._manual_select_apertures_to_fit(xaxis, yaxis, data)
     
+        
         # Fit each aperture subimage with a model function to find its 
-        # center and guess at mag_r
-        self.fit_penumbra(xaxis, yaxis, data)
+        # center
+        if aperture_model == 'penumbra':
+            self._fit_penumbra(xaxis, yaxis, data, plots=plots)
+        elif aperture_model == 'pinhole_supergaussian':
+            raise NotImplementedError("The pinhole supergaussian aperture model is not yet implemented")
         
         # Fit the centers with the array model to get a final global fit
         # to determine the optimal adjustment
-        self.fit_array()
+        self._fit_array()
         
-        self.plot_with_data(xaxis, yaxis, data)
+        if plots:
+            self.plot_with_data(xaxis, yaxis, data)
         
         
-    def _rough_adjust(self, xaxis, yaxis, data):
+    def _manual_rough_adjust(self, xaxis, yaxis, data):
+        """
+        Allow user to manually set a rough adjustment using a cli interface.
+        """
         
         # Ensure inline plotting
         get_ipython().run_line_magic('matplotlib', 'inline')
@@ -313,61 +482,105 @@ class PinholeArray:
         print("Finished pinhole array rough adjustment")
         
         
-    def _select_apertures(self, xaxis, yaxis, data, auto_select=False):
+        
+    def _auto_select_apertures_to_fit(self, xaxis, yaxis, data):
+        """
+        Automatically select apertures to include in the fit.
+        
+        Currently the only available algorithm is to select all apertures that
+        do not clip the edges of the image (based on their pinhole diameter)
+        """
+        
+        # TODO: this diameter calculation won't work as well for pinhole images
+        # where the image is not the same size as the projected aperture. 
+        # Add a tuning parameter for the size here for that? Or 
+        # somehow extract that first? 
         
         # Compute the distance from the edge of the domain that an aperture needs
         # to be to be auto-selected
         offset = 1.5*(0.5*self.diameter.to(u.cm).value)*self.mag_s
         
         # Auto-exclude apertures that are not within the current bounds
-        self.use = (self.use *
+        self.use_for_fit = (self.use_for_fit *
                 (self.xy[:,0] > np.min(xaxis) + offset ) *
                 (self.xy[:,0] < np.max(xaxis) - offset ) *
                 (self.xy[:,1] > np.min(yaxis) + offset ) *
                 (self.xy[:,1] < np.max(yaxis) - offset)
                ).astype(bool)
         
-        if not auto_select:
-            # Switch to qt plotting for interactive plots
-            get_ipython().run_line_magic('matplotlib', 'qt')
-            
-            fig, ax = self.plot_with_data(xaxis, yaxis, data)
-            print("Select the apertures")
-            print("Green/red = Include/exclude")
-            print("Left click on apertures to toggle")
-            print("Middle mouse button click (or 'Enter' key) to re-plot or finish")
-            while True:
-                cursor = Cursor(ax, color='red', linewidth=1)
-                cor = plt.ginput(-1, timeout=-1)  
-                for c in cor:
-                    # Identify the closest index pinhole to this coordinate
-                    dist = np.sqrt((self.xy[:,0] - c[0])**2 +
-                                    (self.xy[:,1] - c[1])**2 )
-                    
-    
-                    # Switch the value in the 'pinholes_use' array
-                    ind = np.argmin(dist)
-                    self.use[ind] = ~self.use[ind] 
-                    fig, ax = fig, ax = self.plot_with_data(xaxis, yaxis, 
-                                                            data, fig, ax)
-                
-                if len(cor) == 0:
-                    break
-                
-            print(f"Finished selecting apertures")
         
+    def _manual_select_apertures_to_fit(self, xaxis, yaxis, data):
+        """
+        Take user input to select apertures to include or exclude in the fit
+        using a graphical point and click interface.
+
+        """
+        
+        # run auto-select to at least get an intelligently chosen baseline
+        self._auto_select_apertures_to_fit(xaxis, yaxis, data)
+       
+        
+        # Switch to qt plotting for interactive plots
+        get_ipython().run_line_magic('matplotlib', 'qt')
+        
+        fig, ax = self.plot_with_data(xaxis, yaxis, data)
+        print("Select the apertures")
+        print("Green/red = Include/exclude")
+        print("Left click on apertures to toggle")
+        print("Middle mouse button click (or 'Enter' key) to re-plot or finish")
+        while True:
+            cursor = Cursor(ax, color='red', linewidth=1)
+            cor = plt.ginput(-1, timeout=-1)  
+            for c in cor:
+                # Identify the closest index pinhole to this coordinate
+                dist = np.sqrt((self.xy[:,0] - c[0])**2 +
+                                (self.xy[:,1] - c[1])**2 )
+                
+
+                # Switch the value in the 'pinholes_use' array
+                ind = np.argmin(dist)
+                self.use_for_fit[ind] = ~self.use_for_fit[ind] 
+                fig, ax = fig, ax = self.plot_with_data(xaxis, yaxis, 
+                                                        data, fig, ax)
+            
+            if len(cor) == 0:
+                break
+            
+        print("Finished selecting apertures")
+    
         # Switch back to inline plotting so as to not disturb the console 
         # plots
         get_ipython().run_line_magic('matplotlib', 'inline')
-        self.plot_with_data(xaxis, yaxis, data)
 
 
-    def fit_penumbra(self, xaxis, yaxis, data):
+    def _fit_penumbra(self, xaxis, yaxis, data, plots=True):
+        """
+        Fit the selected aperture images with the penumbra model to find
+        their centers and estimate the magnification based on their radius.
+        
+        
+        The algorithm works by taking a square region ~1.3x the expected
+        diameter of the each aperture image and fitting it with a penumbra
+        model (`_penumbral_model`). The fit is conducted in stages to speed
+        up the computation. All but the final fit are performed on a thinned
+        copy of the array to speed up the fits.
+        
+        1) First just the amplitude of the model is fit
+        2) The amplitude + the center are fit
+        3) The amplitude + the magnification are fit
+        4) All the parameters are fit 
+        5) A final fit is conducted using the full resolution sub arrays to
+           achieve the maximum possible accuracy in the fit results.
+        
+        
+        """
+        
+        
         w = 1.3*(self.mag_s*0.5*self.diameter.to(u.cm).value)
         radius = self.diameter.to(u.cm).value/2
         
         
-        use_ind = [i for i,v in enumerate(self.use) if v==1]
+        use_ind = [i for i,v in enumerate(self.use_for_fit) if v==1]
         
         # Save the center coordinates and magnification from each fit
         self.pinhole_centers = np.zeros([len(use_ind),2])
@@ -452,35 +665,47 @@ class PinholeArray:
             self.pinhole_centers[i,1] = p[2]
             mag_r[i] = p[3]
             
-
-            fig, ax = plt.subplots()
-            ax.set_aspect('equal')
-            ax.pcolormesh(x, y, arr.T)
-        
-            ax.scatter(self.xy[ind,0], self.xy[ind,1], 
-                       color='red', label='Old center')
+            if plots:
+                fig, ax = plt.subplots()
+                ax.set_aspect('equal')
+                ax.pcolormesh(x, y, arr.T)
             
-            circle = plt.Circle((p[1], p[2]),  radius*p[3], color='black',
-                                fill=False, linestyle='dashed', label='Diameter')
-            ax.add_patch(circle)
-            
-            ax.scatter(p[1], p[2], color='black', label='New center')
-            ax.set_title(f"Aperture # {ind}")
-            ax.legend()
-            plt.show()
+                ax.scatter(self.xy[ind,0], self.xy[ind,1], 
+                           color='red', label='Old center')
+                
+                circle = plt.Circle((p[1], p[2]),  radius*p[3], color='black',
+                                    fill=False, linestyle='dashed', label='Diameter')
+                ax.add_patch(circle)
+                
+                ax.scatter(p[1], p[2], color='black', label='New center')
+                ax.set_title(f"Aperture # {ind}")
+                ax.legend()
+                plt.show()
             
         self.mag_r = np.mean(mag_r)
         
 
     
-    def fit_array(self):
+    def _fit_array(self):
+        """
+        Fit the aperture array model to the centers of the aperatures
+        (identified in previous steps.) The fit is conducted in several steps
+        to speed it up: 
+            
+            
+        1) The translation, rotation, and magnification are fit
+        2) The skew is fit
+            
+            
+        Finally, the best result adjustment is applied to the PinholeArray
+        """
         
         if self.pinhole_centers is None:
             raise ValueError("pinhole_centers not defined. Individual "
                              "apertures need to be fit first.")
         
         # Nominal locations for the pinholes being fit
-        xy_nom = self.xy_prime[self.use,:]
+        xy_nom = self.xy_prime[self.use_for_fit,:]
         
         # Fit the centers found with the pinhole array model
         print("Fitting pinhole array model to points")
@@ -513,10 +738,6 @@ class PinholeArray:
         p[0:4] = res.x
         print(p)
         
-        
-        
-        
-
         print("...Fitting skew and skew angle")
         model = lambda args: _pinhole_array_model(xy_nom, self.pinhole_centers,
                                                   *p[0:4], *args, *p[6:])
@@ -525,24 +746,27 @@ class PinholeArray:
         p[4:6] = res.x
         print(p)
 
-        
-        
-        
+
         self.adjust(dx=p[0], dy=p[1], rot=p[2], mag_s=p[3],
                              skew=p[4], skew_angle=p[5], hreflect=p[6],
                              vreflect=p[7])
         
         
-        error = np.sqrt( (self.xy[self.use, 0]- self.pinhole_centers[:,0])**2 +
-                                (self.xy[self.use, 1]- self.pinhole_centers[:,1])**2 )
+        error = np.sqrt( (self.xy[self.use_for_fit, 0]- self.pinhole_centers[:,0])**2 +
+                                (self.xy[self.use_for_fit, 1]- self.pinhole_centers[:,1])**2 )
         
         print(f"Pinhole fit max error: {np.max(error)*1e4:.2} um")
         print(f"Pinhole fit mean error: {np.mean(error)*1e4:.2} um")
         
-        
-
         print("Done with fine adjustment")
         
+        
+        
+    # TODO: Add use_for_stack and functions to select a different set of
+    # apertures to use for stacking
+    
+    # TODO: If width goes off the edge of the array, pad out to the desired
+    # width with NaN. Then NaN mean in the stacking process.
         
         
     def stack(self, xaxis, yaxis, data, width=None):
@@ -562,7 +786,7 @@ class PinholeArray:
         w = int(width/2/dx)
         
         # Indices of the apetures to include
-        use_ind = [i for i,v in enumerate(self.use) if v==1]
+        use_ind = [i for i,v in enumerate(self.use_for_fit) if v==1]
         
         output = np.zeros([2*w, 2*w])
         
@@ -610,14 +834,14 @@ class PinholeArray:
         
 
         if self.xy is not None:
-            ax.scatter(self.xy[self.use,0], 
-                       self.xy[self.use,1], color='green')
+            ax.scatter(self.xy[self.use_for_fit,0], 
+                       self.xy[self.use_for_fit,1], color='green')
             
-            ax.scatter(self.xy[~self.use,0], 
-                       self.xy[~self.use,1], color='red')
+            ax.scatter(self.xy[~self.use_for_fit,0], 
+                       self.xy[~self.use_for_fit,1], color='red')
             
             
-        if self.pinhole_centers is not None:
+        if self.mag_r is not None:
             ax.scatter(self.pinhole_centers[:,0], 
                        self.pinhole_centers[:,1],  color='black',
                        marker='x')
@@ -630,19 +854,87 @@ class PinholeArray:
                                     fill=False, linestyle='dashed')
                 ax.add_patch(circle)
                 
-        
-        
-            
+
         plt.show()
             
         return  fig, ax
             
             
     def plot_array(self):
+        """
+        Plot the pinhole array with the current adjustments applied
+        """
+        
         fig, ax = plt.subplots()
         
         ax.set_aspect('equal')
         ax.scatter(self.xy[:,0], self.xy[:,1])
-        ax.set_title(self.name)
+        ax.set_title(self.id)
         
         plt.show()
+        
+        
+        
+def pinhole_array_info(name):
+    
+    """
+    Given a pinhole ID as a string, returns information about that pinhole 
+    
+    
+    Returns
+    -------
+    
+    results : tuple: 
+        
+        Contains: 
+            - xy : array of pinhole locations in cm in the pinhole 
+              plane [Npinholes, 2]
+            - spacing : pinhole horizontal spacing
+            - diameter : pinhole diameter
+            - material : pinhole material
+            - thickness : pinhole thickness
+            
+    
+    """
+    
+    
+    if name == 'D-PF-C-055_A':
+        # LLE 210x Ta array, 0.3 mm diameter, 0.6 mm spacing
+        spacing = 0.06 # cm, horiz separation
+        spacing_vert = spacing*np.cos(np.deg2rad(30)) #mm, 0.182 row separation
+        
+        # Define the number of pinholes per row
+        N_row = np.array([7, 10, 11, 12, 13, 14, 15, 16, 15, 16, 15, 14, 13, 12, 11, 10, 7])
+        # Create a cumulative array, starting with a zero, for indexing
+        ncum = np.cumsum(N_row)
+        nslice = np.concatenate((np.zeros(1), ncum)).astype(np.int32)
+        
+        npinholes = np.sum(N_row)
+        xy = np.zeros([npinholes,2])
+    
+        for i in range(N_row.size):#i = 1:length(N_row)
+            x_ind = np.arange(N_row[i]) - (N_row[i]-1)/2
+            y_ind = i - (N_row.size-1)/2
+            
+            xloc = x_ind*spacing*np.ones(x_ind.size)
+            yloc = y_ind*spacing_vert*np.ones(x_ind.size)
+            xy[nslice[i]:nslice[i+1], :] = np.array([xloc, yloc]).T
+
+        # Remove 'blank' position
+        # index row/column to skip
+        # Both 1 indexed!
+        blanks = [ (5, 10) ] 
+        keep = np.ones(npinholes, dtype=bool)
+        for i, blank in enumerate(blanks):
+            row = blank[0]-1
+            ind = ncum[row] + blank[1]
+            keep[ind] = False
+            
+        xy = xy[keep, :]
+        
+        diameter = 0.03*u.cm
+        material = 'Ta';
+        thickness = 0.02*u.cm
+        
+        
+        return  xy, spacing, diameter, material, thickness
