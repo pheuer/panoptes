@@ -63,7 +63,7 @@ class XrayIP:
                 raise ValueError("The 'data_dir' keyword is required in order "
                                  "to locate a file based on a shot number.")
             
-            self.path = self._find_data(args[0])
+            self.path = self._find_data(args[0], data_dir)
             
 
         
@@ -76,10 +76,10 @@ class XrayIP:
         else:
             self._select_subregion()
         
-    def _find_data(self, id):
+    def _find_data(self, id, data_dir):
         
         
-        self.file_dir = os.path.join(self.data_dir, str(id))
+        self.file_dir = os.path.join(data_dir, str(id))
             
         # Verify the data_dir exists
         if not os.path.isdir(self.file_dir):
