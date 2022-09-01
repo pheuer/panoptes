@@ -197,11 +197,11 @@ class XrayIP:
         ax.set_ylim(np.min(y_c), np.max(y_c))
         
         if self.pinholes is not None:
-            ax.scatter(self.pinholes.xy[self.pinholes.use,0], 
-                       self.pinholes.xy[self.pinholes.use,1], color='green')
+            ax.scatter(self.pinholes.xy[self.pinholes.use_for_fit,0], 
+                       self.pinholes.xy[self.pinholes.use_for_fit,1], color='green')
             
-            ax.scatter(self.pinholes.xy[~self.pinholes.use,0], 
-                       self.pinholes.xy[~self.pinholes.use,1], color='red')
+            ax.scatter(self.pinholes.xy[~self.pinholes.use_for_fit,0], 
+                       self.pinholes.xy[~self.pinholes.use_for_fit,1], color='red')
             
         plt.show()
             
@@ -215,12 +215,14 @@ class XrayIP:
 if __name__ == '__main__':
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
+    h4toh5convert_path = os.path.join('C:\\','Program Files','HDF_Group','H4H5','2.2.5','bin', 'h4toh5convert.exe')
     
+    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
     h4toh5convert_path = os.path.join('C:\\','Program Files','HDF_Group','H4H5','2.2.5','bin', 'h4toh5convert.exe')
     
     obj = XrayIP(103955, pinhole_array='D-PF-C-055_A', 
                  data_dir=data_dir,
-                 subregion = [(0.23, 9.6), (5.1, 0.1)],
+                 subregion = [(0.4, 9), (5.1, 0.4)],
                  h4toh5convert_path=h4toh5convert_path,
                  )
     obj.fit_pinholes(rough_adjust={'dx':-0.2, 'dy':-0.3, 'mag_s':35.5, 'rot':-17},
