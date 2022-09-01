@@ -861,27 +861,51 @@ class PinholeArray:
             
         # Calculate the half-width in pixels
         dx = np.mean(np.gradient(xaxis))
-        w = int(width/2/dx)
+        dy = np.mean(np.gradient(yaxis))
+        wx = int(width/2/dx)
+        wy = int(width/2/dy)
         
         # Indices of the apetures to include
         use_ind = [i for i,v in enumerate(self.use_for_stack) if v==1]
         
-        output = np.zeros([2*w, 2*w])
+        
+        
+    
+        pad = 3*np.max([wx, wy])
+        print(f"pad: {pad}")
+        
+        data =  np.pad(data, pad_width=pad,
+                       mode='constant',
+                       constant_values=np.nan)
+    
+        
+        # Pad the axes with linear extrapolation 
+        xaxis = np.pad(xaxis, pad_width=pad, 
+                       mode='linear_ramp',
+                       end_values=(np.min(xaxis)-pad*dx, np.max(xaxis)+pad*dx) )
+
+        yaxis = np.pad(yaxis, pad_width=pad, 
+                       mode='linear_ramp',
+                       end_values=(np.min(yaxis)-pad*dy, np.max(yaxis)+pad*dy) )
+        
         
         # For each aperture, select the data region around each aperture
         # and sum them
+        output = np.zeros([2*wx, 2*wy, len(use_ind)])
+        
         for i, ind in enumerate(use_ind):
             x0 = np.argmin(np.abs(xaxis - (self.pinhole_centers[i,0])))
             y0 = np.argmin(np.abs(yaxis - (self.pinhole_centers[i,1])))
             
-            data_subset = data[x0-w:x0+w, y0-w:y0+w]
+            data_subset = data[x0-wx:x0+wx, y0-wy:y0+wy]
 
-            output += data_subset
-                
+            output[...,i] = data_subset
             
+        output = np.nanmean(output, axis=-1)
+
         # Calculate new x and y axes centered on this image
-        xaxis = np.linspace(-width/2, width/2, 2*w)
-        yaxis = np.linspace(-width/2, width/2, 2*w)
+        xaxis = np.linspace(-width/2, width/2, 2*wx)
+        yaxis = np.linspace(-width/2, width/2, 2*wy)
         
         return xaxis, yaxis, output
         
