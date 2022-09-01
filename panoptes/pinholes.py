@@ -419,7 +419,7 @@ class PinholeArray:
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
             border = 1.5*(0.5*self.diameter.to(u.cm).value)*self.mag_s
-            border = -0.25
+            border = 0.5
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
@@ -662,50 +662,20 @@ class PinholeArray:
         mag_r = np.zeros([len(use_ind)])
         
         
-        dx = np.mean(np.gradient(xaxis))
-        dy = np.mean(np.gradient(yaxis))
-        wx = int(width/dx)
-        wy = int(width/dy)
-        pad = 3*np.max([wx, wy])
-        print(f"pad: {pad}")
-        
-        
-        # Pad the data array with NaN
 
-        data =  np.pad(data, pad_width=pad,
-                       mode='constant',
-                       constant_values=np.nan)
-    
-        
-        # Pad the axes with linear extrapolation 
-        xaxis = np.pad(xaxis, pad_width=pad, 
-                       mode='linear_ramp',
-                       end_values=(np.min(xaxis)-pad*dx, np.max(xaxis)+pad*dx) )
-
-        yaxis = np.pad(yaxis, pad_width=pad, 
-                       mode='linear_ramp',
-                       end_values=(np.min(yaxis)-pad*dy, np.max(yaxis)+pad*dy) )
-        
-        
-        
         for i, ind in enumerate(use_ind):
             print(f"Fitting aperture {i+1}/{len(use_ind)} (# {ind})")
         
           
             # Find the indices that bound the subregion around this aperture
-            x0 = np.argmin(np.abs(xaxis - (self.xy[ind,0])))
-            xa = x0 - wx
-            xb = x0 + wx
-            y0 = np.argmin(np.abs(yaxis - (self.xy[ind,1])))
-            ya = y0 - wy
-            yb = y0 + wy
+            xa = np.argmin(np.abs(xaxis - (self.xy[ind,0] - width)))
+            xb = np.argmin(np.abs(xaxis - (self.xy[ind,0] + width)))
+            ya = np.argmin(np.abs(xaxis - (self.xy[ind,1] - width)))
+            yb = np.argmin(np.abs(xaxis - (self.xy[ind,1] + width)))
             
-            #print(self.xy[ind,:])
-            #print(f"{xaxis[xa]} - {xaxis[xb]}")
-            #print(f"{yaxis[ya]} - {yaxis[yb]}")
+            print(self.xy[ind,:])
+            print(f"{xa}, {xb}, {ya}, {yb}")
             
-            #print(f"{xa}, {xb}, {ya}, {yb}")
-            #print(f"{wx}, {wy}")
                     
             # Cut out the subregion, make an array of axes for the points
             arr = data[xa:xb, ya:yb]
