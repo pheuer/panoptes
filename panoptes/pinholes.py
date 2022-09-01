@@ -418,8 +418,7 @@ class PinholeArray:
             
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
-            border = 1.5*(0.5*self.diameter.to(u.cm).value)*self.mag_s
-            border = 0.5
+            border = -0.25
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
@@ -670,8 +669,8 @@ class PinholeArray:
             # Find the indices that bound the subregion around this aperture
             xa = np.argmin(np.abs(xaxis - (self.xy[ind,0] - width)))
             xb = np.argmin(np.abs(xaxis - (self.xy[ind,0] + width)))
-            ya = np.argmin(np.abs(xaxis - (self.xy[ind,1] - width)))
-            yb = np.argmin(np.abs(xaxis - (self.xy[ind,1] + width)))
+            ya = np.argmin(np.abs(yaxis - (self.xy[ind,1] - width)))
+            yb = np.argmin(np.abs(yaxis - (self.xy[ind,1] + width)))
             
             print(self.xy[ind,:])
             print(f"{xa}, {xb}, {ya}, {yb}")
