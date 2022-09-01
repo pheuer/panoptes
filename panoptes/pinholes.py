@@ -128,8 +128,10 @@ class PinholeArray:
         # the pinhole info in it.
         
         
-        # Indices of pinholes to use in analysis
+        # Indices of pinholes to use for fitting the array model
         self.use_for_fit = np.ones(self.npinholes).astype(bool)
+        # Indices of pinholes to stack
+        self.use_for_stack = np.ones(self.npinholes).astype(bool)
         
         # The locations of the pinhole centers
         # (determined by fitting each aperture image)
@@ -402,14 +404,31 @@ class PinholeArray:
         if plots:
             self.plot_with_data(xaxis, yaxis, data)
         
+
+        
         # Select pinholes to include in the remainder of the analysis
         if use_apertures is not None:
             self.use_for_fit = np.array(use_apertures)
         else:
+            
+            # TODO: this diameter calculation won't work as well for pinhole images
+            # where the image is not the same size as the projected aperture. 
+            # Add a tuning parameter for the size here for that? Or 
+            # somehow extract that first? 
+            
+            # Compute the distance from the edge of the domain that an aperture needs
+            # to be to be auto-selected
+            border = 1.5*(0.5*self.diameter.to(u.cm).value)*self.mag_s
+            border = -0.25
+            
             if auto_select_apertures:
-                self._auto_select_apertures_to_fit(xaxis, yaxis, data)
+                self._auto_select_apertures(xaxis, yaxis, data, 
+                                                   variable='fit',
+                                                   border=border)
             else:
-                self._manual_select_apertures_to_fit(xaxis, yaxis, data)
+                self._manual_select_apertures(xaxis, yaxis, data,
+                                                     variable='fit',
+                                                     border=border)
     
         
         # Fit each aperture subimage with a model function to find its 
@@ -483,42 +502,93 @@ class PinholeArray:
         
         
         
-    def _auto_select_apertures_to_fit(self, xaxis, yaxis, data):
+    def _auto_select_apertures(self, xaxis, yaxis, data, variable='fit', 
+                               border = 0):
         """
         Automatically select apertures to include in the fit.
         
         Currently the only available algorithm is to select all apertures that
         do not clip the edges of the image (based on their pinhole diameter)
+        
+        Parameters
+        ----------
+        
+        xaxis, yaxis, data : np.ndarray
+            Data and axes
+            
+            
+        variable : str 
+            Changes which list of apertures is changed. 
+            
+            - 'fit' : the list of apertures used to fit the array
+            - 'stack' : the list of apertures to stack
+        
+        
+        border : float
+            Ignore apertures within this distance (in axis units) of the
+            edge. If negative, include apertures within that region outside
+            of the current image.
+        
         """
-        
-        # TODO: this diameter calculation won't work as well for pinhole images
-        # where the image is not the same size as the projected aperture. 
-        # Add a tuning parameter for the size here for that? Or 
-        # somehow extract that first? 
-        
-        # Compute the distance from the edge of the domain that an aperture needs
-        # to be to be auto-selected
-        offset = 1.5*(0.5*self.diameter.to(u.cm).value)*self.mag_s
+        if variable == 'fit':
+            use = self.use_for_fit
+        elif variable == 'stack':
+            use = self.use_for_stack
         
         # Auto-exclude apertures that are not within the current bounds
-        self.use_for_fit = (self.use_for_fit *
-                (self.xy[:,0] > np.min(xaxis) + offset ) *
-                (self.xy[:,0] < np.max(xaxis) - offset ) *
-                (self.xy[:,1] > np.min(yaxis) + offset ) *
-                (self.xy[:,1] < np.max(yaxis) - offset)
+        use = (use *
+                (self.xy[:,0] > np.min(xaxis) + border ) *
+                (self.xy[:,0] < np.max(xaxis) - border ) *
+                (self.xy[:,1] > np.min(yaxis) + border ) *
+                (self.xy[:,1] < np.max(yaxis) - border)
                ).astype(bool)
         
+        if variable == 'fit':
+            self.use_for_fit = use
+        elif variable == 'stack':
+            self.use_for_stack = use
         
-    def _manual_select_apertures_to_fit(self, xaxis, yaxis, data):
+        
+        
+    def _manual_select_apertures(self, xaxis, yaxis, data,
+                                 variable='fit',
+                                 border = 0):
         """
         Take user input to select apertures to include or exclude in the fit
         using a graphical point and click interface.
+        
+        
+        Parameters
+        ----------
+        
+        xaxis, yaxis, data : np.ndarray
+            Data and axes
+            
+            
+        variable : str 
+            Changes which list of apertures is changed. 
+            
+            - 'fit' : the list of apertures used to fit the array
+            - 'stack' : the list of apertures to stack
+        
+        
+        border : float
+            Ignore apertures within this distance (in axis units) of the
+            edge. If negative, include apertures within that region outside
+            of the current image.
 
         """
         
+        if variable == 'fit':
+            use = self.use_for_fit
+        elif variable == 'stack':
+            use = self.use_for_stack
+        
+        
         # run auto-select to at least get an intelligently chosen baseline
-        self._auto_select_apertures_to_fit(xaxis, yaxis, data)
-       
+        self._auto_select_apertures_to_fit(xaxis, yaxis, data, variable=variable,
+                                           border=border)
+        
         
         # Switch to qt plotting for interactive plots
         get_ipython().run_line_magic('matplotlib', 'qt')
@@ -539,7 +609,7 @@ class PinholeArray:
 
                 # Switch the value in the 'pinholes_use' array
                 ind = np.argmin(dist)
-                self.use_for_fit[ind] = ~self.use_for_fit[ind] 
+                use[ind] = ~use[ind] 
                 fig, ax = fig, ax = self.plot_with_data(xaxis, yaxis, 
                                                         data, fig, ax)
             
@@ -547,6 +617,11 @@ class PinholeArray:
                 break
             
         print("Finished selecting apertures")
+        
+        if variable == 'fit':
+            self.use_for_fit = use
+        elif variable == 'stack':
+            self.use_for_stack = use
     
         # Switch back to inline plotting so as to not disturb the console 
         # plots
@@ -576,7 +651,7 @@ class PinholeArray:
         """
         
         
-        w = 1.3*(self.mag_s*0.5*self.diameter.to(u.cm).value)
+        width = 1.3*(self.mag_s*0.5*self.diameter.to(u.cm).value)
         radius = self.diameter.to(u.cm).value/2
         
         
@@ -585,21 +660,60 @@ class PinholeArray:
         # Save the center coordinates and magnification from each fit
         self.pinhole_centers = np.zeros([len(use_ind),2])
         mag_r = np.zeros([len(use_ind)])
-
-        for i, ind in enumerate(use_ind):
-            print(f"Fitting aperture {i+1}/{len(use_ind)}")
         
+        
+        dx = np.mean(np.gradient(xaxis))
+        dy = np.mean(np.gradient(yaxis))
+        wx = int(width/dx)
+        wy = int(width/dy)
+        pad = 3*np.max([wx, wy])
+        print(f"pad: {pad}")
+        
+        
+        # Pad the data array with NaN
+
+        data =  np.pad(data, pad_width=pad,
+                       mode='constant',
+                       constant_values=np.nan)
+    
+        
+        # Pad the axes with linear extrapolation 
+        xaxis = np.pad(xaxis, pad_width=pad, 
+                       mode='linear_ramp',
+                       end_values=(np.min(xaxis)-pad*dx, np.max(xaxis)+pad*dx) )
+
+        yaxis = np.pad(yaxis, pad_width=pad, 
+                       mode='linear_ramp',
+                       end_values=(np.min(yaxis)-pad*dy, np.max(yaxis)+pad*dy) )
+        
+        
+        
+        for i, ind in enumerate(use_ind):
+            print(f"Fitting aperture {i+1}/{len(use_ind)} (# {ind})")
+        
+          
             # Find the indices that bound the subregion around this aperture
-            xa = np.argmin(np.abs(xaxis - (self.xy[ind,0]-w)))
-            xb = np.argmin(np.abs(xaxis - (self.xy[ind,0]+w)))
-            ya = np.argmin(np.abs(yaxis - (self.xy[ind,1]-w)))
-            yb = np.argmin(np.abs(yaxis - (self.xy[ind,1]+w)))
+            x0 = np.argmin(np.abs(xaxis - (self.xy[ind,0])))
+            xa = x0 - wx
+            xb = x0 + wx
+            y0 = np.argmin(np.abs(yaxis - (self.xy[ind,1])))
+            ya = y0 - wy
+            yb = y0 + wy
             
+            #print(self.xy[ind,:])
+            #print(f"{xaxis[xa]} - {xaxis[xb]}")
+            #print(f"{yaxis[ya]} - {yaxis[yb]}")
+            
+            #print(f"{xa}, {xb}, {ya}, {yb}")
+            #print(f"{wx}, {wy}")
+                    
             # Cut out the subregion, make an array of axes for the points
             arr = data[xa:xb, ya:yb]
             x = xaxis[xa:xb]
             y = yaxis[ya:yb]
+            
             axes = np.meshgrid(x, y, indexing='ij')
+            
             
             # Reduce the resolution of the image to speed up the initial fits
             # We want to reduce it to be ~30 px
@@ -624,7 +738,7 @@ class PinholeArray:
                   self.xy[ind,0],
                   self.xy[ind,1],
                   self.mag_s, # Guess that mag_r = mag_s
-                  1e-3, np.mean(data)]
+                  1e-4, np.mean(data)]
      
 
             # AMPLITUDE FIT
@@ -655,10 +769,11 @@ class PinholeArray:
             model = lambda args: _penumbra_model(axes_c, arr_c, radius, *args)
             p = fmin(model, p, disp=False)
             
+            # TODO: uncomment for full resolution!
             # FIT EVERYTHING
-            print("...final fit w/ all variables (full resolution)")
-            model = lambda args: _penumbra_model(axes, arr, radius, *args)
-            p = fmin(model, p, disp=False)
+            #print("...final fit w/ all variables (full resolution)")
+            #model = lambda args: _penumbra_model(axes, arr, radius, *args)
+            #p = fmin(model, p, disp=False)
             
             # xc, yc, mag_r
             self.pinhole_centers[i,0] = p[1]
@@ -761,13 +876,7 @@ class PinholeArray:
         print("Done with fine adjustment")
         
         
-        
-    # TODO: Add use_for_stack and functions to select a different set of
-    # apertures to use for stacking
-    
-    # TODO: If width goes off the edge of the array, pad out to the desired
-    # width with NaN. Then NaN mean in the stacking process.
-        
+
         
     def stack(self, xaxis, yaxis, data, width=None):
         """
@@ -786,7 +895,7 @@ class PinholeArray:
         w = int(width/2/dx)
         
         # Indices of the apetures to include
-        use_ind = [i for i,v in enumerate(self.use_for_fit) if v==1]
+        use_ind = [i for i,v in enumerate(self.use_for_stack) if v==1]
         
         output = np.zeros([2*w, 2*w])
         
