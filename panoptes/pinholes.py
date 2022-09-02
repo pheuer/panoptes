@@ -227,7 +227,7 @@ class PinholeArray:
         """
         
         # Write pinhole information
-        info_grp = grp['pinhole_info']
+        info_grp = grp.create_group('pinhole_info')
         info_grp['id'] = self.id
         info_grp['diameter'] = self.diameter.to(u.um).value
         info_grp['diameter'].attrs['unit'] = 'um'
@@ -237,8 +237,8 @@ class PinholeArray:
         info_grp['xy_prime'] = self.xy_prime
          
         # Save the pinhole fit + selection parameters
-        adjustment_grp = grp['adjustment']
-        for val, key in self.adjustment:
+        adjustment_grp = grp.create_group('adjustment')
+        for key, val in self.adjustment.items():
             adjustment_grp[key] = val
             
         grp['xy'] = self.xy
@@ -847,17 +847,60 @@ class PinholeArray:
         
 
         
-    def stack(self, xaxis, yaxis, data, width=None):
+    def stack(self, xaxis, yaxis, data, width=None, use_apertures=None,
+              auto_select_apertures=True):
         """
         Stack the data from the selected pinholes
+        
+        
+        Paramters
+        ---------
+        width : float
+            The width and height of the stacked image
+        
+        
+        use_apertures : bool array [napertures,], optional
+            A boolean list or array indicating which apertures to include
+            in the fit. If False (default) apertures will be selected
+            automatically or with user input.
+            
+        auto_select_apertures : bool, optional
+            If True, automatically select the apertures for the fit and skip
+            asking for user input.
+        
         """
         
         if self.pinhole_centers is None:
             raise ValueError("pinhole_centers not defined. Individual "
                              "apertures need to be fit first.")
+            
+            
+        # Select pinholes to include in the remainder of the analysis
+        if use_apertures is not None:
+            self.use_for_stack = np.array(use_apertures)
+        else:
+            
+            # TODO: this diameter calculation won't work as well for pinhole images
+            # where the image is not the same size as the projected aperture. 
+            # Add a tuning parameter for the size here for that? Or 
+            # somehow extract that first? 
+            
+            # Compute the distance from the edge of the domain that an aperture needs
+            # to be to be auto-selected
+            border = -0.25
+            
+            if auto_select_apertures:
+                self._auto_select_apertures(xaxis, yaxis, data, 
+                                                   variable='stack',
+                                                   border=border)
+            else:
+                self._manual_select_apertures(xaxis, yaxis, data,
+                                                     variable='stack',
+                                                     border=border)
+            
         
         if width is None:
-            width = 1.3*(self.mag_s*self.diameter.to(u.cm).value)
+            width = 1.25*(self.mag_s*self.diameter.to(u.cm).value)
             
         # Calculate the half-width in pixels
         dx = np.mean(np.gradient(xaxis))
