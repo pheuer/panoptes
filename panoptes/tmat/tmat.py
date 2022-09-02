@@ -5,19 +5,17 @@ import h5py
 import numpy as np
 
 
-from numba import njit, prange
+from multiprocessing import Pool
+import tqdm
     
-    
-    
+from panoptes.util.misc import timestamp
+from panoptes.util.misc import  find_file
 
 
 
+class TransferMatrix (h5py.File): 
 
-class TransferMatrix: 
-    tmat_dir = os.path.join('//expdiv','kodi','TransferMatrices')
-
-
-    def __init__(self, *args):
+    def __init__(self, path):
         """
         Represents a transfer matrix between the object and image plane
         of a pinhole or penumbral imager.
@@ -81,6 +79,7 @@ class TransferMatrix:
 
     
         """
+        
         # Constants
         # xo,yo,xi,yi are stored as private attributes because their public
         # attributes will return the subset including any limits. 
@@ -94,10 +93,6 @@ class TransferMatrix:
         self.psf = None
         self.psf_ax = None
         
-        # Tmat
-        # tmat is also a private attribute because the public version includes
-        # any limits that are set.
-        self._tmat = None
         
         # Dimensions
         self.R_ap = None
@@ -109,45 +104,63 @@ class TransferMatrix:
         
         
         
-        
-        
-        # Get the file (if an argument was provided)
-        if len(args) >= 1: 
-            # If it's an id, look for the file in the configured tmat directory
-            
-            # If it's a filepath, assume that is the filepath
-            
-            
-            # If the file contains the tmat constants, load them and set
-            # them for the object
-            
-            
-            # If the file contains a computed tmat, load that too
-            
-            pass
-            
+        self.path = path
+        #self.load()
+
+    @property
+    def tmat(self, slice=None):
+        with h5py.File(self.path, 'r') as f:
+            result = f['tmat'][slice]   
+        return result
 
 
-    def save(self, path):
-        if self._xo is not None:
-            self.save_constants(path)
-        
-        if self._tmat is not None:
-            self.save_tmat(path)
-            
-        if self.R_ap is not None:
-            self.save_dimensions(path)
-        
-        
-    def load(self, path):
-        self.load_constants(path)
-        self.load_tmat(path)
-        self.load_dimensions(path)
-        
-
+    def save(self, path=None):
     
-
+        with h5py.File(self.path, 'w') as f:
+            if self._xo is not None:
+                f['xo'] = self._xo.to(u.cm).value
+                f['yo'] = self._yo.to(u.cm).value
+                f['xi'] = self._xi.to(u.cm).value
+                f['yi'] = self._yi.to(u.cm).value
+                f['mag'] = self.mag
+                f['ap_xy'] = self.ap_xy
+                f['psf'] = self.psf
+                f['psf_ax'] = self.psf_ax
+            
+            # Tmat is saved from the calc_tmat routine
+                
+            if self.R_ap is not None:
+                f['R_ap'] = self.R_ap.to(u.cm).value
+                f['L_det'] = self.L_det.to(u.cm).value
+                f['xo_lim'] = self.xo_lim.to(u.cm).value
+                f['yo_lim'] = self.yo_lim.to(u.cm).value
+                f['xi_lim'] = self.xi_lim.to(u.cm).value
+                f['yi_lim'] = self.yi_lim.to(u.cm).value
         
+            
+    def load(self):
+        
+        with h5py.File(self.path, 'a') as f:
+            if 'xo' in f.keys():
+                self._xo = f['xo'][...] * u.cm
+                self._yo = f['yo'][...]* u.cm
+                self._xi = f['xi'][...]* u.cm
+                self._yi = f['yi'][...]* u.cm
+                self.mag = f['mag']
+                self.ap_xy = f['ap_xy'][...]  
+                self.psf = f['psf'][:]
+                self.psf_ax = f['psf_ax'][:]          
+                
+            # Don't actually load the tmat! Tmat may be huge!
+                
+            if 'R_ap' in f.keys():
+                self.R_ap = f['R_ap'] * u.cm
+                self.L_det = f['L_det'] * u.cm
+                self.xo_lim = f['xo_lim'] * u.cm
+                self.yo_lim = f['yo_lim'] * u.cm
+                self.xi_lim = f['xi_lim'] * u.cm
+                self.yi_lim = f['yi_lim'] * u.cm
+
     def set_constants(self, xo, yo, xi, yi, mag, ap_xy, 
                       psf=None, psf_ax=None):
         """
@@ -159,64 +172,10 @@ class TransferMatrix:
         self._yi = yi
         self.mag = mag
         self.ap_xy = ap_xy
-        
         self.psf = psf
         self.psf_ax = psf_ax
 
-        
-    def save_constants(self, path):
-        with h5py.File(path, 'w') as f:
-            f['xo'] = self._xo.to(u.cm).value
-            f['yo'] = self._yo.to(u.cm).value
-            f['xi'] = self._xi.to(u.cm).value
-            f['yi'] = self._yi.to(u.cm).value
-            f['mag'] = self.mag
-            f['ap_xy'] = self.ap_xy
-            f['psf'] = self.psf
-            f['psf_ax'] = self.psf_ax
-            
-            
-    def load_constants(self, path):
-        with h5py.File(path, 'r') as f:
-            self._xo = f['xo'][...] * u.cm
-            self._yo = f['yo'][...]* u.cm
-            self._xi = f['xi'][...]* u.cm
-            self._yi = f['yi'][...]* u.cm
-            self.mag = f['mag']
-            self.ap_xy = f['ap_xy'][...]  
-            self.psf = f['psf'][:]
-            self.psf_ax = f['psf_ax'][:]            
     
-    def save_tmat(self, path):
-        
-        # TODO: chunk this as chunks of object plane together
-        
-        with h5py.File(path, 'w') as f: 
-            f['tmat'] = self._tmat
-            
-    def load_tmat(self, path):
-        with h5py.File(path, 'w') as f: 
-            self._tmat = f['tmat'][...]
-
-    def save_dimensions(self, path):
-        with h5py.File(path, 'w') as f:
-            f['R_ap'] = self.R_ap.to(u.cm).value
-            f['L_det'] = self.L_det.to(u.cm).value
-            f['xo_lim'] = self.xo_lim.to(u.cm).value
-            f['yo_lim'] = self.yo_lim.to(u.cm).value
-            f['xi_lim'] = self.xi_lim.to(u.cm).value
-            f['yi_lim'] = self.yi_lim.to(u.cm).value
-            
-    def load_dimensions(self, path):
-        with h5py.File(path, 'r') as f:
-            self.R_ap = f['R_ap'] * u.cm
-            self.L_det = f['L_det'] * u.cm
-            self.xo_lim = f['xo_lim'] * u.cm
-            self.yo_lim = f['yo_lim'] * u.cm
-            self.xi_lim = f['xi_lim'] * u.cm
-            self.yi_lim = f['yi_lim'] * u.cm
-    
-
     def set_R_ap(self, R_ap):
         """
         Parameters
@@ -311,8 +270,7 @@ class TransferMatrix:
         self.xo_lim = xo_lim
         self.yo_lim = yo_lim
         
-    
-    
+
     @property
     def xo(self):
         return self._xo[self.xo_slice]
@@ -347,12 +305,11 @@ class TransferMatrix:
         return self._yi*self.R_ap*self.mag
 
     @property
-    def tmat(self):
+    def tmat_slice(self):
             return self._tmat[self.xi_slice, self.yi_slice, 
                               self.xo_slice, self.yo_slice]
         
-        
-        
+
     def calc_tmat(self):
         """
         Calculates the transfer matrix based on the set constants.
@@ -375,63 +332,89 @@ class TransferMatrix:
         xi = xi.flatten()
         yi = yi.flatten()
         
-        # Run the numba-fied parallel loop to do the computation
-        tmat = _calc_tmat_numba(xo, yo, xi, yi, 
-                                self.mag, 
-                                self.ap_xy.to(u.cm).value, 
-                                self.psf, 
-                                self.psf_ax)
         
-        self._tmat = np.reshape(tmat, [nxo, nyo, nxi, nyi])
-
-
+        # Calculate chunk size, chunking object plane together
+        ideal_size = 10e6 #bytes
+        data_bytes = 4 # Float32
+        # Ideal chunk size in image plane (each pixel = 1 full object plane)
+        chunk_size = int(ideal_size/(nxo*nyo)/data_bytes)
+        nchunks = np.ceil(nxi*nyi/chunk_size).astype(np.int32)
+        print(f"Chunk size: {chunk_size}")
+        print(f"nchunks: {nchunks}")
         
-@njit(parallel=True)
-def _calc_tmat_numba(xo, yo, xi, yi, mag, ap_xy, psf, psf_ax):
-    """
-    Numba-fied function to calculate a transfer matrix
-    
-    Parameters
-    ----------
-    xo, yo : np.ndarray (nxo,) (nyo,)
-        Coordinates in the object plane
-        
-    xi, yi : np.ndarray (nxi,) (nyi,)
-        Coordinates in the image plane
-        
-        
-    
-    """
-    
-    tmat = np.empty((xo.size, xi.size))
-    
-    # Do a parallel loop through all of the image plane pixels
-    for i in prange(xi.size): 
-        
-        # Do a serial loop over all object plane pixels for this image
-        # plane pixel
-        res = np.empty(xo.size)
-        for o in range(xo.size):
-    
-            # Compute the position of each point in the aperture plane
-            xa =  xi[i] + xo[o]*(mag-1)/mag
-            ya =  yi[i] + yo[o]*(mag-1)/mag
+        # Break the image array into chunks
+        chunks = []
+        for c in range(nchunks):
+            a = c*chunk_size
+            if c == nchunks-1:
+                b = -1
+            else:
+                b = (c+1)*chunk_size
             
-            # Compute the distance from this point to every aperture
-            r = np.sqrt(  (xa - ap_xy[:,0])**2 + 
-                          (ya - ap_xy[:,1])**2
-                        )
+            chunks.append( [xo, yo, xi[a:b], yi[a:b], self.mag, 
+                            self.ap_xy.to(u.cm).value, 
+                            self.psf, self.psf_ax, a, b] )
+ 
+    
 
-            # Store the distance to the nearest aperture
-            # NOTE: we are ignoring contributions from multiple pinholes for now
-            res[o] = np.min(r)
-            
-        # Interpolate the value of the transfer matrix at this point
-        # from the point spread function
-        tmat[:,i] = np.interp(res, psf_ax, psf)
+        with h5py.File(self.path, 'a') as f:
+            # Erase the tmat dataset if it already exists
+            if 'tmat' in f.keys():
+                del f['tmat']
+                
+            # Create the tmat dataset
+            f.create_dataset('tmat', (nxo*nyo, nxi*nyi), dtype='float32',
+                             compression='gzip', compression_opts=3)
         
+            with Pool() as p:
+                
+                # Initialize a tqdm progress bar
+                with tqdm.tqdm(total=len(chunks)) as pbar:
+                    
+                    # Loop through the mapped calculations on the parallel pool
+                    for i, result in enumerate(p.imap(_calc_tmat, chunks)):
+                        
+                        # Push up or down values near zero or 1
+                        result[np.abs(result)<1e-3] = 0
+                        result[np.abs(result-1)<1e-3] = 1
+                        
+                        # Store the result
+                        a = chunks[i][-2]
+                        b = chunks[i][-1]
+                        f['tmat'][:, a:b] = result
+                        
+                        # Update the progress bar that this iteration is done
+                        pbar.update()
+
+
+
+
+def _calc_tmat(arg):
+    xo, yo, xi, yi, mag, ap_xy, psf, psf_ax, _, _ = arg
+    
+    # Compute the position of each point in the aperture plane
+    xa =  xi[np.newaxis, :] + xo[:, np.newaxis]*(mag-1)/mag
+    ya =  yi[np.newaxis, :] + yo[:, np.newaxis]*(mag-1)/mag
+    
+    # Compute the distance from this point to every aperture
+    r = np.sqrt(  (xa[..., np.newaxis] - ap_xy[:,0])**2 + 
+                  (ya[..., np.newaxis] - ap_xy[:,1])**2
+                )
+    
+    # Store the distance to the nearest aperture
+    # NOTE: we are ignoring contributions from multiple pinholes for now
+    res = np.min(r, axis=-1)
+    
+    # Interpolate the value of the transfer matrix at this point
+    # from the point spread function
+    tmat = np.interp(res, psf_ax, psf)
+    
     return tmat
-            
+
+
+
+        
+
 
 
 
@@ -439,38 +422,46 @@ def _calc_tmat_numba(xo, yo, xi, yi, mag, ap_xy, psf, psf_ax):
 
 
 if __name__ == '__main__':
+    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    
+    data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
+    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
+    
+    save_path = os.path.join(data_dir, '103955', 'tmat.h5')
+   
+    
+    
     isize=400
-    osize=81
+    osize=80
     
     import numpy as np
     import time
-    xo = np.linspace(-1, 1, num=osize)
-    yo=np.linspace(-1, 1, num=osize)
-    xi = np.linspace(-10,10, num=isize)
-    yi=np.linspace(-10,10, num=isize)
+    xo = np.linspace(-1, 1, num=osize)*u.cm
+    yo=np.linspace(-1, 1, num=osize)*u.cm
+    xi = np.linspace(-10,10, num=isize)*u.cm
+    yi=np.linspace(-10,10, num=isize)*u.cm
     mag = 10
-    ap_xy = np.array([[0,0], [-4,0], [4, 0], [-6, 0], [6, 0], [2,4], [4,2]])
+    ap_xy = np.array([[0,0], [-4,0], [4, 0], [-6, 0], [6, 0], [2,4], [4,2]])*u.cm
     
     psf = np.concatenate((np.ones(50), np.zeros(50)))
     psf_ax = np.linspace(0, 2, num=100)
     
     
-    t = TransferMatrix()
+    t = TransferMatrix(save_path)
     
     
     t.set_constants(xo, yo, xi, yi, mag, ap_xy, psf=psf, psf_ax=psf_ax)
     
+    t.save()
+
+    
+    print("Calculating tmat")
     t0 = time.time()
     t.calc_tmat()
     
     print(f"Time: {time.time() - t0:.1f} sec")
     
+
     
-    print(t._tmat.shape)
     
     
-    import matplotlib.pyplot as plt
-    
-    fig, ax = plt.subplots()
-    ax.set_aspect('equal')
-    ax.pcolormesh(t._tmat[20, 20, :, :].T)
