@@ -36,13 +36,12 @@ class TransferMatrix:
              
         xi, yi : 1D np.ndarray
             Axes for each dimension of the transfer matrix in the image plane.
-            Normalized to R_ap*mag_r
+            Normalized to R_ap*mag
             
             
-        mag_r : float
+        mag : float
             Radiography magnification: 1 + L2/L1. 
-            The pinhole magnification L2/L1 = mag_r -1 is available as the
-            attribute `mag_p`
+
             
         ap_xy : np.ndarray (N_ap, 2)
             The locations of the aperture centers in the pinhole plane.
@@ -90,7 +89,7 @@ class TransferMatrix:
         self._yo = None
         self._xi = None
         self._yi = None
-        self.mag_r = None
+        self.mag = None
         self.ap_xy = None
         self.psf = None
         self.psf_ax = None
@@ -128,15 +127,16 @@ class TransferMatrix:
             pass
             
 
-    @property
-    def mag_p(self): 
-        return self.mag_r - 1
-    
-    
+
     def save(self, path):
-        self.save_constants(path)
-        self.save_tmat(path)
-        self.save_dimensions(path)
+        if self._xo is not None:
+            self.save_constants(path)
+        
+        if self._tmat is not None:
+            self.save_tmat(path)
+            
+        if self.R_ap is not None:
+            self.save_dimensions(path)
         
         
     def load(self, path):
@@ -148,7 +148,7 @@ class TransferMatrix:
     
 
         
-    def set_constants(self, xo, yo, xi, yi, mag_r, ap_xy, 
+    def set_constants(self, xo, yo, xi, yi, mag, ap_xy, 
                       psf=None, psf_ax=None):
         """
         Set the constants that define the transfer matrix. 
@@ -157,7 +157,7 @@ class TransferMatrix:
         self._yo = yo
         self._xi = xi
         self._yi = yi
-        self.mag_r = mag_r
+        self.mag = mag
         self.ap_xy = ap_xy
         
         self.psf = psf
@@ -166,11 +166,11 @@ class TransferMatrix:
         
     def save_constants(self, path):
         with h5py.File(path, 'w') as f:
-            f['xo'] = self._xo
-            f['yo'] = self._yo
-            f['xi'] = self._xi
-            f['yi'] = self._yi
-            f['mag_r'] = self.mag_r
+            f['xo'] = self._xo.to(u.cm).value
+            f['yo'] = self._yo.to(u.cm).value
+            f['xi'] = self._xi.to(u.cm).value
+            f['yi'] = self._yi.to(u.cm).value
+            f['mag'] = self.mag
             f['ap_xy'] = self.ap_xy
             f['psf'] = self.psf
             f['psf_ax'] = self.psf_ax
@@ -178,11 +178,11 @@ class TransferMatrix:
             
     def load_constants(self, path):
         with h5py.File(path, 'r') as f:
-            self._xo = f['xo'][...]
-            self._yo = f['yo'][...]
-            self._xi = f['xi'][...]
-            self._yi = f['yi'][...]
-            self.mag_r = f['mag_r']
+            self._xo = f['xo'][...] * u.cm
+            self._yo = f['yo'][...]* u.cm
+            self._xi = f['xi'][...]* u.cm
+            self._yi = f['yi'][...]* u.cm
+            self.mag = f['mag']
             self.ap_xy = f['ap_xy'][...]  
             self.psf = f['psf'][:]
             self.psf_ax = f['psf_ax'][:]            
@@ -336,7 +336,7 @@ class TransferMatrix:
     @property
     def xi_scaled(self):
         self._check_units_set()
-        return self._xi*self.R_ap*self.mag_r
+        return self._xi*self.R_ap*self.mag
     
     @property
     def yi(self):
@@ -344,7 +344,7 @@ class TransferMatrix:
     @property
     def yi_scaled(self):
         self._check_units_set()
-        return self._yi*self.R_ap*self.mag_r
+        return self._yi*self.R_ap*self.mag
 
     @property
     def tmat(self):
@@ -366,8 +366,10 @@ class TransferMatrix:
         nyi = self._yi.size
         
         # Create 2D arrays
-        xo, yo = np.meshgrid(self._xo, self._yo, indexing='ij')
-        xi, yi = np.meshgrid(self._xi, self._yi, indexing='ij')
+        xo, yo = np.meshgrid(self._xo.to(u.cm).value, 
+                             self._yo.to(u.cm).value, indexing='ij')
+        xi, yi = np.meshgrid(self._xi.to(u.cm).value, 
+                             self._yi.to(u.cm).value, indexing='ij')
         xo = xo.flatten()
         yo = yo.flatten()
         xi = xi.flatten()
@@ -375,8 +377,8 @@ class TransferMatrix:
         
         # Run the numba-fied parallel loop to do the computation
         tmat = _calc_tmat_numba(xo, yo, xi, yi, 
-                                mag_r, 
-                                self.ap_xy, 
+                                self.mag, 
+                                self.ap_xy.to(u.cm).value, 
                                 self.psf, 
                                 self.psf_ax)
         
@@ -385,12 +387,20 @@ class TransferMatrix:
 
         
 @njit(parallel=True)
-def _calc_tmat_numba(xo, yo, xi, yi, mag_r, ap_xy, psf, psf_ax):
+def _calc_tmat_numba(xo, yo, xi, yi, mag, ap_xy, psf, psf_ax):
     """
     Numba-fied function to calculate a transfer matrix
     
     Parameters
     ----------
+    xo, yo : np.ndarray (nxo,) (nyo,)
+        Coordinates in the object plane
+        
+    xi, yi : np.ndarray (nxi,) (nyi,)
+        Coordinates in the image plane
+        
+        
+    
     """
     
     tmat = np.empty((xo.size, xi.size))
@@ -404,8 +414,8 @@ def _calc_tmat_numba(xo, yo, xi, yi, mag_r, ap_xy, psf, psf_ax):
         for o in range(xo.size):
     
             # Compute the position of each point in the aperture plane
-            xa =  xi[i] + xo[o]*(mag_r-1)/mag_r
-            ya =  yi[i] + yo[o]*(mag_r-1)/mag_r
+            xa =  xi[i] + xo[o]*(mag-1)/mag
+            ya =  yi[i] + yo[o]*(mag-1)/mag
             
             # Compute the distance from this point to every aperture
             r = np.sqrt(  (xa - ap_xy[:,0])**2 + 
@@ -438,7 +448,7 @@ if __name__ == '__main__':
     yo=np.linspace(-1, 1, num=osize)
     xi = np.linspace(-10,10, num=isize)
     yi=np.linspace(-10,10, num=isize)
-    mag_r = 10
+    mag = 10
     ap_xy = np.array([[0,0], [-4,0], [4, 0], [-6, 0], [6, 0], [2,4], [4,2]])
     
     psf = np.concatenate((np.ones(50), np.zeros(50)))
@@ -448,7 +458,7 @@ if __name__ == '__main__':
     t = TransferMatrix()
     
     
-    t.set_constants(xo, yo, xi, yi, mag_r, ap_xy, psf=psf, psf_ax=psf_ax)
+    t.set_constants(xo, yo, xi, yi, mag, ap_xy, psf=psf, psf_ax=psf_ax)
     
     t0 = time.time()
     t.calc_tmat()
