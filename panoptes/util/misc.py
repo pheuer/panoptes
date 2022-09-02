@@ -1,4 +1,13 @@
 import os
+import datetime
+
+def timestamp():
+    """
+    Creates a timestamp string
+    """
+    now = datetime.now()
+    return now.strftime("%y%m%d_%H%M%S")
+
 
 def _compressed(xaxis, yaxis, data, chunk=25):
     """
