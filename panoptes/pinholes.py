@@ -900,7 +900,7 @@ class PinholeArray:
             
         
         if width is None:
-            width = 1.25*(self.mag_s*self.diameter.to(u.cm).value)
+            width = 1.5*(self.mag_s*self.diameter.to(u.cm).value)
             
         # Calculate the half-width in pixels
         dx = np.mean(np.gradient(xaxis))

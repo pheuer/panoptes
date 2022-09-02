@@ -118,10 +118,10 @@ class TransferMatrix (h5py.File):
     
         with h5py.File(self.path, 'w') as f:
             if self._xo is not None:
-                f['xo'] = self._xo.to(u.cm).value
-                f['yo'] = self._yo.to(u.cm).value
-                f['xi'] = self._xi.to(u.cm).value
-                f['yi'] = self._yi.to(u.cm).value
+                f['xo'] = self._xo.to(u.dimensionless_unscaled).value
+                f['yo'] = self._yo.to(u.dimensionless_unscaled).value
+                f['xi'] = self._xi.to(u.dimensionless_unscaled).value
+                f['yi'] = self._yi.to(u.dimensionless_unscaled).value
                 f['mag'] = self.mag
                 f['ap_xy'] = self.ap_xy
                 f['psf'] = self.psf
@@ -142,10 +142,10 @@ class TransferMatrix (h5py.File):
         
         with h5py.File(self.path, 'a') as f:
             if 'xo' in f.keys():
-                self._xo = f['xo'][...] * u.cm
-                self._yo = f['yo'][...]* u.cm
-                self._xi = f['xi'][...]* u.cm
-                self._yi = f['yi'][...]* u.cm
+                self._xo = f['xo'][...]
+                self._yo = f['yo'][...]
+                self._xi = f['xi'][...]
+                self._yi = f['yi'][...]
                 self.mag = f['mag']
                 self.ap_xy = f['ap_xy'][...]  
                 self.psf = f['psf'][:]
@@ -323,10 +323,10 @@ class TransferMatrix (h5py.File):
         nyi = self._yi.size
         
         # Create 2D arrays
-        xo, yo = np.meshgrid(self._xo.to(u.cm).value, 
-                             self._yo.to(u.cm).value, indexing='ij')
-        xi, yi = np.meshgrid(self._xi.to(u.cm).value, 
-                             self._yi.to(u.cm).value, indexing='ij')
+        xo, yo = np.meshgrid(self._xo.to(u.dimensionless_unscaled).value, 
+                             self._yo.to(u.dimensionless_unscaled).value, indexing='ij')
+        xi, yi = np.meshgrid(self._xi.to(u.dimensionless_unscaled).value, 
+                             self._yi.to(u.dimensionless_unscaled).value, indexing='ij')
         xo = xo.flatten()
         yo = yo.flatten()
         xi = xi.flatten()
@@ -352,8 +352,10 @@ class TransferMatrix (h5py.File):
                 b = (c+1)*chunk_size
             
             chunks.append( [xo, yo, xi[a:b], yi[a:b], self.mag, 
-                            self.ap_xy.to(u.cm).value, 
-                            self.psf, self.psf_ax, a, b] )
+                            self.ap_xy.to(u.dimensionless_unscaled).value, 
+                            self.psf, 
+                            self.psf_ax.to(u.dimensionless_unscaled).value, 
+                            a, b] )
  
     
 
@@ -425,26 +427,30 @@ if __name__ == '__main__':
     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
-    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
+    #data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
     
     save_path = os.path.join(data_dir, '103955', 'tmat.h5')
    
     
     
-    isize=400
-    osize=80
+    isize=100
+    osize=20
     
     import numpy as np
     import time
-    xo = np.linspace(-1, 1, num=osize)*u.cm
-    yo=np.linspace(-1, 1, num=osize)*u.cm
-    xi = np.linspace(-10,10, num=isize)*u.cm
-    yi=np.linspace(-10,10, num=isize)*u.cm
-    mag = 10
-    ap_xy = np.array([[0,0], [-4,0], [4, 0], [-6, 0], [6, 0], [2,4], [4,2]])*u.cm
+    
+    mag = 30
+    R_ap = 150*u.um
+    
+    xo = np.linspace(-0.01, 0.01, num=osize)*u.cm / R_ap
+    yo=np.linspace(-0.01, 0.01, num=osize)*u.cm / R_ap
+    xi = np.linspace(-0.6,0.6, num=isize)*u.cm / R_ap / mag
+    yi=np.linspace(-0.6,0.6, num=isize)*u.cm / R_ap / mag
+    
+    ap_xy = np.array([[0,0]])*u.cm / R_ap
     
     psf = np.concatenate((np.ones(50), np.zeros(50)))
-    psf_ax = np.linspace(0, 2, num=100)
+    psf_ax = np.linspace(0, 2*R_ap, num=100) / R_ap
     
     
     t = TransferMatrix(save_path)
@@ -460,6 +466,24 @@ if __name__ == '__main__':
     t.calc_tmat()
     
     print(f"Time: {time.time() - t0:.1f} sec")
+    
+    import matplotlib.pyplot as plt
+    
+    with h5py.File(save_path, 'r') as f:
+        tmat = f['tmat'][...]
+        
+    print(tmat.shape)
+
+    
+    arr = tmat[200, :]
+    arr = np.reshape(arr, (xi.size, yi.size))
+    
+    print(arr.shape)
+    
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    ax.pcolormesh( (xi*R_ap*mag).to(u.um).value, 
+                  (yi*R_ap*mag).to(u.um).value, arr.T)
     
 
     
