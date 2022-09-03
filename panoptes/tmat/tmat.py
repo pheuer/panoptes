@@ -442,8 +442,8 @@ if __name__ == '__main__':
     mag = 30
     R_ap = 150*u.um
     
-    xo = np.linspace(-0.01, 0.01, num=osize)*u.cm / R_ap
-    yo=np.linspace(-0.01, 0.01, num=osize)*u.cm / R_ap
+    xo = np.linspace(-0.015, 0.015, num=osize)*u.cm / R_ap
+    yo=np.linspace(-0.015, 0.015, num=osize)*u.cm / R_ap
     xi = np.linspace(-0.6,0.6, num=isize)*u.cm / R_ap / mag
     yi=np.linspace(-0.6,0.6, num=isize)*u.cm / R_ap / mag
     
@@ -473,9 +473,19 @@ if __name__ == '__main__':
         tmat = f['tmat'][...]
         
     print(tmat.shape)
+    
+    
+    xarr, yarr = np.meshgrid(xo.value, yo.value, indexing='ij')
+    print(xarr.flatten())
+    print(yarr.flatten())
+    
+    r = np.sqrt(xarr**2 + yarr**2).flatten()
+    i = np.argmin(r)
+    print(i)
 
     
-    arr = tmat[200, :]
+    arr = tmat[i,:]
+    #arr = np.mean(tmat, axis=0)
     arr = np.reshape(arr, (xi.size, yi.size))
     
     print(arr.shape)
