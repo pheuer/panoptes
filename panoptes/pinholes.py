@@ -24,10 +24,9 @@ from matplotlib.widgets import Cursor
 from scipy.optimize import fmin, minimize
 from scipy.special import erf
 
-# Make plots appear in new windows
+
 from IPython import get_ipython
-#get_ipython().run_line_magic('matplotlib', 'qt')
-get_ipython().run_line_magic('matplotlib', 'inline')
+
 
 from panoptes.util.misc import _compressed
 
@@ -117,6 +116,9 @@ class PinholeArray:
         the pinhole or radiography magnification. 
      
         """
+        # Make plots appear in new windows
+        get_ipython().run_line_magic('matplotlib', 'inline')
+        
         
         self.plots = plots
         
