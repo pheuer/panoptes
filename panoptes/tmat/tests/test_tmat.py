@@ -25,7 +25,7 @@ def _tmat_mult(tmat, obj, ishape):
     
     obj_flat = obj.flatten()
     
-    img_flat = np.matmul(obj_flat, tmat)
+    img_flat = np.matmul(tmat, obj_flat)
     
     return np.reshape(img_flat, ishape)
 

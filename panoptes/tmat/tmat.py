@@ -285,7 +285,7 @@ def calculate_tmat(tmat):
             del f['tmat']
             
         # Create the tmat dataset
-        f.create_dataset('tmat', (nxo*nyo, nxi*nyi), dtype='float32',
+        f.create_dataset('tmat', (nxi*nyi, nxo*nyo), dtype='float32',
                          compression='gzip', compression_opts=3)
     
         with Pool() as p:
@@ -303,7 +303,7 @@ def calculate_tmat(tmat):
                     # Store the result
                     a = chunks[i][-2]
                     b = chunks[i][-1]
-                    f['tmat'][:, a:b] = result
+                    f['tmat'][a:b, :] = result
                     
                     # Update the progress bar that this iteration is done
                     pbar.update()
@@ -318,8 +318,8 @@ def _calc_tmat(arg):
     xo, yo, xi, yi, mag, ap_xy, psf, psf_ax, _, _ = arg
     
     # Compute the position of each point in the aperture plane
-    xa =  xi[np.newaxis, :] + xo[:, np.newaxis]*(mag-1)/mag
-    ya =  yi[np.newaxis, :] + yo[:, np.newaxis]*(mag-1)/mag
+    xa =  xi[:, np.newaxis] + xo[np.newaxis, :]*(mag-1)/mag
+    ya =  yi[:, np.newaxis] + yo[np.newaxis, :]*(mag-1)/mag
     
     # Compute the distance from this point to every aperture
     r = np.sqrt(  (xa[..., np.newaxis] - ap_xy[:,0])**2 + 
@@ -397,7 +397,7 @@ if __name__ == '__main__':
     print(i)
 
     
-    arr = tmat[i,:]
+    arr = tmat[:,i]
     #arr = np.mean(tmat, axis=0)
     arr = np.reshape(arr, (xi.size, yi.size))
     
