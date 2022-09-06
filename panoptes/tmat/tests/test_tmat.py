@@ -21,10 +21,10 @@ from scipy.optimize import fmin, curve_fit
 
 
 
-def _tmat_mult(tmat, obj, ishape):
+def _tmat_mult(tmat, obj, ishape, background_value=0.0):
     
-    obj_flat = obj.flatten()
-    
+    # Flatten the object and add the background pixel
+    obj_flat = np.concatenate([obj.flatten(), np.array([background_value,])])
     img_flat = np.matmul(tmat, obj_flat)
     
     return np.reshape(img_flat, ishape)

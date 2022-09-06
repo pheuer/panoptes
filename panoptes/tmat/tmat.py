@@ -296,8 +296,11 @@ def calculate_tmat(tmat):
             del f['tmat']
             
         # Create the tmat dataset
-        f.create_dataset('tmat', (nxi*nyi, nxo*nyo), dtype='float32',
+        f.create_dataset('tmat', (nxi*nyi, nxo*nyo+1), dtype='float32',
                          compression='gzip', compression_opts=3)
+        
+        # Set the transfer matrix for the noise pixel
+        f['tmat'][:, -1] = np.ones(nxi*nyi)
     
         with Pool() as p:
             
@@ -314,7 +317,7 @@ def calculate_tmat(tmat):
                     # Store the result
                     a = chunks[i][-2]
                     b = chunks[i][-1]
-                    f['tmat'][a:b, :] = result
+                    f['tmat'][a:b, :-1] = result
                     
                     # Update the progress bar that this iteration is done
                     pbar.update()
@@ -408,7 +411,8 @@ if __name__ == '__main__':
     print(i)
 
     
-    arr = tmat[:,i]
+    arr = tmat[:,-1]
+    print(arr)
     #arr = np.mean(tmat, axis=0)
     arr = np.reshape(arr, (xi.size, yi.size))
     

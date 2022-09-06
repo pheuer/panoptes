@@ -81,8 +81,11 @@ def gelfgat_poisson(P, T, niter, h_friction=3):
             
             pbar.update()
 
-        
-    return B, logL, chisq
+    # Remove the background pixel 
+    background = B[:, -1]
+    B = B[:, :-1]
+
+    return B, logL, chisq, background
 
 
 
