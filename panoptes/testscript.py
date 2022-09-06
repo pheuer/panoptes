@@ -8,27 +8,22 @@ import numpy as np
 import astropy.units as u
 import os, h5py
 
-from panoptes.tmat.tmat import TransferMatrix
-from panoptes.gelfgat import gelfgat_poisson
+from panoptes.tmat.tmat import TransferMatrix, calculate_tmat
+from panoptes.reconstruction.gelfgat import gelfgat_poisson, calculate_termination
 
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     
+    oshape = (25, 25)
+    
     #__spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir", "103955")
-    #data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir', "103955")
+    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir', "103955")
 
     datafile = os.path.join(data_dir, 'xray-stack.h5')
     tmat_path = os.path.join(data_dir, 'tmat.h5')
-
-
-
-    
-    
-    
-    
 
 
     with h5py.File(datafile, 'r') as f:
@@ -46,9 +41,18 @@ if __name__ == '__main__':
     psf_ax = np.linspace(0, 2*R_ap, num=100)/R_ap
     
     
-    xlim = 80
-    xo = np.linspace(-xlim, xlim, num=50) * u.um / R_ap
-    yo = np.linspace(-xlim, xlim, num=50) * u.um / R_ap
+    print(f"xi shape: {xi.shape}")
+    print(f"yi shape: {yi.shape}")
+    
+    
+    dxi = np.mean(np.gradient(xi))
+    dxo = (dxi/mag).to(u.um)
+    print(dxo)
+    
+    
+    xlim = 300
+    xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
+    yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
     
     xi = xi/R_ap/mag
     yi = yi/R_ap/mag
@@ -73,41 +77,27 @@ if __name__ == '__main__':
     print("Calculating tmat")
     t.set_constants(xo, yo, xi, yi, mag, ap_xy, psf=psf, psf_ax=psf_ax)
     t.save(tmat_path)
-    t.calc_tmat()
+    calculate_tmat(t)
     
         
     print("Reading tmat")  
     with h5py.File(tmat_path, 'r') as f:
         T = f['tmat'][...]
+
         
-        
-    print(T.shape)
-    arr = np.reshape(T[200, :], (nxi, nyi))
-    fig, ax = plt.subplots()
-    ax.set_aspect('equal')
-    ax.pcolormesh((xi*R_ap*mag).to(u.cm).value, (yi*R_ap*mag).to(u.cm).value, arr.T)
- 
-        
-    
-    # TODO: transpose the transfer matrix order in the tmat file
-    T = T.T
-    B, logL, chisq, DOFs = gelfgat_poisson(data.flatten(), T, 50, h_friction=3)
+    B, logL, chisq= gelfgat_poisson(data.flatten(), T, 50, h_friction=3)
     
     fig, ax = plt.subplots()
     ax.plot(logL)
-    
-    
+
     print(B.shape)
     print(logL.shape)
     
+    ind = calculate_termination(B, logL)
     
-    for i in [5, 10, 15, 20, 25, 30]:
-    
-        arr = np.reshape(B[i, :], (nxo, nyo))
-        
-        fig, ax = plt.subplots()
-        ax.set_aspect('equal')
-        ax.pcolormesh((xo*R_ap).to(u.um).value, (yo*R_ap).to(u.um).value, arr.T)
-        plt.show()
-        
-    
+    sol = np.reshape(B[ind, :], oshape)
+  
+    fig, ax = plt.subplots()
+    ax.set_title(f"Termination iter {ind+1}")
+    ax.set_aspect('equal')
+    ax.pcolormesh(sol.T)
