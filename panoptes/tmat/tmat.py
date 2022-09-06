@@ -224,6 +224,17 @@ class TransferMatrix (h5py.File):
     def yi_scaled(self):
         self._check_units_set()
         return self._yi*self.R_ap*self.mag
+    
+    
+    
+    
+    def validate(self):
+        """
+        Test whether dxo*mag < dxi
+
+        """
+        
+        pass
 
 
 
