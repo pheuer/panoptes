@@ -127,15 +127,11 @@ class TransferMatrix (h5py.File):
                 f['psf'] = self.psf
                 f['psf_ax'] = self.psf_ax
             
-            # Tmat is saved from the calc_tmat routine
                 
             if self.R_ap is not None:
                 f['R_ap'] = self.R_ap.to(u.cm).value
                 f['L_det'] = self.L_det.to(u.cm).value
-                f['xo_lim'] = self.xo_lim.to(u.cm).value
-                f['yo_lim'] = self.yo_lim.to(u.cm).value
-                f['xi_lim'] = self.xi_lim.to(u.cm).value
-                f['yi_lim'] = self.yi_lim.to(u.cm).value
+
         
             
     def load(self):
@@ -151,15 +147,10 @@ class TransferMatrix (h5py.File):
                 self.psf = f['psf'][:]
                 self.psf_ax = f['psf_ax'][:]          
                 
-            # Don't actually load the tmat! Tmat may be huge!
-                
             if 'R_ap' in f.keys():
                 self.R_ap = f['R_ap'] * u.cm
                 self.L_det = f['L_det'] * u.cm
-                self.xo_lim = f['xo_lim'] * u.cm
-                self.yo_lim = f['yo_lim'] * u.cm
-                self.xi_lim = f['xi_lim'] * u.cm
-                self.yi_lim = f['yi_lim'] * u.cm
+
 
     def set_constants(self, xo, yo, xi, yi, mag, ap_xy, 
                       psf=None, psf_ax=None):
@@ -176,7 +167,7 @@ class TransferMatrix (h5py.File):
         self.psf_ax = psf_ax
 
     
-    def set_R_ap(self, R_ap):
+    def set_dimensions(self, R_ap, L_det):
         """
         Parameters
         ----------
@@ -184,22 +175,13 @@ class TransferMatrix (h5py.File):
         R_ap : u.Quantity
             Radius of the apertures
             
+        L_det : u.Quantity
+            Source to detector distance 
+            
         """
         self.R_ap = R_ap
-
-        
-    def set_L_det(self, L_det):
-        """
-        L_det, along with the magnification which is part of the tmat, 
-        defines the geometry along with R_ap.
-        
-        Parameters
-        ----------
-
-        L : u.Quantity
-            Source to detector distance 
-        """
         self.L_det = L_det
+
         
     @property
     def scale_set(self):
@@ -210,70 +192,9 @@ class TransferMatrix (h5py.File):
             raise ValueError("Must set both R_ap and L_det!")
         
         
-    def _calc_limits(self, axis, scaled_axis, limits):
-        """
-        Given the dimensionless axis, the scaled axis, and some limits, 
-        calculate the slice for that axis.
-        
- 
-        """
-        if limits is None:
-            return slice(0, axis.size, None)
-        
-        elif isinstance(limits[0], u.Quantity):
-            self._check_units_set()
-            a = np.argmin(np.abs(scaled_axis - limits[0]))
-            b = np.argmin(np.abs(scaled_axis - limits[1]))
-            
-        else:
-            a = np.argmin(np.abs(axis - limits[0]))
-            b = np.argmin(np.abs(axis - limits[1]))
-        
-        return slice(a,b,None)
-        
-    def set_limits(self, xi_lim=None, yi_lim=None, xo_lim=None, yo_lim=None ):
-        """
-        Sets the limits in each axis
-        
-        Each limit keyword must be a tuple of either u.Quantities or floats.
-        
-        If floats are provided, limits will be calculated using the dimensionless
-        axes. 
-        If u.Quantities are provided, limits will be calculated using the
-        scaled axes.
-    
-        
-        """
-        # Set all the slices to cover the whole array for the calculation
-        # of new clises
-        self.xi_slice = slice(0, None)
-        self.yi_slice = slice(0, None)
-        self.xo_slice = slice(0, None)
-        self.yo_slice = slice(0, None)
-        
-        # Calculate the new slices
-        # If/else handles possiblity that scales have not been set yet
-        if self.scale_set:
-            self.xi_slice = self._calc_limits(self.xi, self.xi_scaled, xi_lim)
-            self.yi_slice = self._calc_limits(self.yi, self.yi_scaled, yi_lim)
-            self.xo_slice = self._calc_limits(self.xo, self.xo_scaled, xo_lim)
-            self.yo_slice = self._calc_limits(self.yo, self.yo_scaled, yo_lim)
-        else:
-            self.xi_slice = self._calc_limits(self.xi, None, xi_lim)
-            self.yi_slice = self._calc_limits(self.yi, None, yi_lim)
-            self.xo_slice = self._calc_limits(self.xo, None, xo_lim)
-            self.yo_slice = self._calc_limits(self.yo, None, yo_lim)
-            
-        # Store the limits
-        self.xi_lim = xi_lim
-        self.yi_lim = yi_lim
-        self.xo_lim = xo_lim
-        self.yo_lim = yo_lim
-        
-
     @property
     def xo(self):
-        return self._xo[self.xo_slice]
+        return self._xo
     @property
     def xo_scaled(self):
         self._check_units_set()
@@ -281,7 +202,7 @@ class TransferMatrix (h5py.File):
     
     @property
     def yo(self):
-        return self._yo[self.yo_slice]
+        return self._yo
     @property
     def yo_scaled(self):
         self._check_units_set()
@@ -290,7 +211,7 @@ class TransferMatrix (h5py.File):
     
     @property
     def xi(self):
-        return self._xi[self.xi_slice]
+        return self._xi
     @property
     def xi_scaled(self):
         self._check_units_set()
@@ -298,100 +219,102 @@ class TransferMatrix (h5py.File):
     
     @property
     def yi(self):
-        return self._yi[self.yi_slice]
+        return self._yi
     @property
     def yi_scaled(self):
         self._check_units_set()
         return self._yi*self.R_ap*self.mag
 
-    @property
-    def tmat_slice(self):
-            return self._tmat[self.xi_slice, self.yi_slice, 
-                              self.xo_slice, self.yo_slice]
-        
 
-    def calc_tmat(self):
-        """
-        Calculates the transfer matrix based on the set constants.
 
-        """
-        
-        # Save the sizes 
-        nxo = self._xo.size
-        nyo = self._yo.size
-        nxi = self._xi.size
-        nyi = self._yi.size
-        
-        # Create 2D arrays
-        xo, yo = np.meshgrid(self._xo.to(u.dimensionless_unscaled).value, 
-                             self._yo.to(u.dimensionless_unscaled).value, indexing='ij')
-        xi, yi = np.meshgrid(self._xi.to(u.dimensionless_unscaled).value, 
-                             self._yi.to(u.dimensionless_unscaled).value, indexing='ij')
-        xo = xo.flatten()
-        yo = yo.flatten()
-        xi = xi.flatten()
-        yi = yi.flatten()
-        
-        
-        # Calculate chunk size, chunking object plane together
-        ideal_size = 10e6 #bytes
-        data_bytes = 4 # Float32
-        # Ideal chunk size in image plane (each pixel = 1 full object plane)
-        chunk_size = int(ideal_size/(nxo*nyo)/data_bytes)
-        nchunks = np.ceil(nxi*nyi/chunk_size).astype(np.int32)
-        print(f"Chunk size: {chunk_size}")
-        print(f"nchunks: {nchunks}")
-        
-        # Break the image array into chunks
-        chunks = []
-        for c in range(nchunks):
-            a = c*chunk_size
-            if c == nchunks-1:
-                b = -1
-            else:
-                b = (c+1)*chunk_size
-            
-            chunks.append( [xo, yo, xi[a:b], yi[a:b], self.mag, 
-                            self.ap_xy.to(u.dimensionless_unscaled).value, 
-                            self.psf, 
-                            self.psf_ax.to(u.dimensionless_unscaled).value, 
-                            a, b] )
- 
+
+
+
+def calculate_tmat(tmat):
+    """
+    Calculates the transfer matrix for a provided TransferMatrix object
+
+    """
     
-
-        with h5py.File(self.path, 'a') as f:
-            # Erase the tmat dataset if it already exists
-            if 'tmat' in f.keys():
-                del f['tmat']
-                
-            # Create the tmat dataset
-            f.create_dataset('tmat', (nxo*nyo, nxi*nyi), dtype='float32',
-                             compression='gzip', compression_opts=3)
+    # Save the sizes 
+    nxo = tmat._xo.size
+    nyo = tmat._yo.size
+    nxi = tmat._xi.size
+    nyi = tmat._yi.size
+    
+    # Create 2D arrays
+    xo, yo = np.meshgrid(tmat._xo.to(u.dimensionless_unscaled).value, 
+                         tmat._yo.to(u.dimensionless_unscaled).value, indexing='ij')
+    xi, yi = np.meshgrid(tmat._xi.to(u.dimensionless_unscaled).value, 
+                         tmat._yi.to(u.dimensionless_unscaled).value, indexing='ij')
+    xo = xo.flatten()
+    yo = yo.flatten()
+    xi = xi.flatten()
+    yi = yi.flatten()
+    
+    
+    # Calculate chunk size, chunking object plane together
+    ideal_size = 10e6 #bytes
+    data_bytes = 4 # Float32
+    # Ideal chunk size in image plane (each pixel = 1 full object plane)
+    chunk_size = int(ideal_size/(nxo*nyo)/data_bytes)
+    nchunks = np.ceil(nxi*nyi/chunk_size).astype(np.int32)
+    print(f"Chunk size: {chunk_size}")
+    print(f"nchunks: {nchunks}")
+    
+    # Break the image array into chunks
+    chunks = []
+    for c in range(nchunks):
+        a = c*chunk_size
+        if c == nchunks-1:
+            b = -1
+        else:
+            b = (c+1)*chunk_size
         
-            with Pool() as p:
-                
-                # Initialize a tqdm progress bar
-                with tqdm.tqdm(total=len(chunks)) as pbar:
-                    
-                    # Loop through the mapped calculations on the parallel pool
-                    for i, result in enumerate(p.imap(_calc_tmat, chunks)):
-                        
-                        # Push up or down values near zero or 1
-                        result[np.abs(result)<1e-3] = 0
-                        result[np.abs(result-1)<1e-3] = 1
-                        
-                        # Store the result
-                        a = chunks[i][-2]
-                        b = chunks[i][-1]
-                        f['tmat'][:, a:b] = result
-                        
-                        # Update the progress bar that this iteration is done
-                        pbar.update()
+        chunks.append( [xo, yo, xi[a:b], yi[a:b], tmat.mag, 
+                        tmat.ap_xy.to(u.dimensionless_unscaled).value, 
+                        tmat.psf, 
+                        tmat.psf_ax.to(u.dimensionless_unscaled).value, 
+                        a, b] )
+ 
 
+
+    with h5py.File(tmat.path, 'a') as f:
+        # Erase the tmat dataset if it already exists
+        if 'tmat' in f.keys():
+            del f['tmat']
+            
+        # Create the tmat dataset
+        f.create_dataset('tmat', (nxo*nyo, nxi*nyi), dtype='float32',
+                         compression='gzip', compression_opts=3)
+    
+        with Pool() as p:
+            
+            # Initialize a tqdm progress bar
+            with tqdm.tqdm(total=len(chunks)) as pbar:
+                
+                # Loop through the mapped calculations on the parallel pool
+                for i, result in enumerate(p.imap(_calc_tmat, chunks)):
+                    
+                    # Push up or down values near zero or 1
+                    result[np.abs(result)<1e-3] = 0
+                    result[np.abs(result-1)<1e-3] = 1
+                    
+                    # Store the result
+                    a = chunks[i][-2]
+                    b = chunks[i][-1]
+                    f['tmat'][:, a:b] = result
+                    
+                    # Update the progress bar that this iteration is done
+                    pbar.update()
 
 
 
 def _calc_tmat(arg):
+    """
+    Calculate a chunk of a transfer matrix 
+    """
+    
     xo, yo, xi, yi, mag, ap_xy, psf, psf_ax, _, _ = arg
     
     # Compute the position of each point in the aperture plane
@@ -418,21 +341,14 @@ def _calc_tmat(arg):
         
 
 
-
-
-
-
-
 if __name__ == '__main__':
     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
-    #data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
+    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
     
     save_path = os.path.join(data_dir, '103955', 'tmat.h5')
    
-    
-    
     isize=100
     osize=20
     
@@ -463,7 +379,7 @@ if __name__ == '__main__':
     
     print("Calculating tmat")
     t0 = time.time()
-    t.calc_tmat()
+    calculate_tmat(t)
     
     print(f"Time: {time.time() - t0:.1f} sec")
     
@@ -471,13 +387,10 @@ if __name__ == '__main__':
     
     with h5py.File(save_path, 'r') as f:
         tmat = f['tmat'][...]
-        
-    print(tmat.shape)
-    
+
     
     xarr, yarr = np.meshgrid(xo.value, yo.value, indexing='ij')
-    print(xarr.flatten())
-    print(yarr.flatten())
+
     
     r = np.sqrt(xarr**2 + yarr**2).flatten()
     i = np.argmin(r)
