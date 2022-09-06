@@ -3,66 +3,8 @@ import numpy as np
 import h5py
 from multiprocessing import Pool
 import tqdm
-"""
-def gelfgat_poisson(P, tmat_file, niter, h_friction=3):
-    
-    
-    with h5py.File(tmat_file, 'a') as f:
-        
-        xo = f['xo'][...]
-        yo = f['yo'][...]
-        xi = f['xi'][...]
-        yi = f['yi'][...]
-        
-        nxo, nyo = xo.size, yo.size
-        nxi, nyi = xi.size, yi.size
-        
-    # Calculate chunk size, chunking the object plane together
-    ideal_size = 10e6 #bytes
-    data_bytes = 4 # Float32
-    # Ideal chunk size in image plane (each pixel = 1 full object plane)
-    chunk_size = int(ideal_size/(nxo*nyo)/data_bytes)
-    nchunks = np.ceil(nxi*nyi/chunk_size).astype(np.int32)
-    print(f"Chunk size: {chunk_size}")
-    print(f"nchunks: {nchunks}")
-    
-    # Break the image array into chunks
-    chunks = []
-    for c in range(nchunks):
-        a = c*chunk_size
-        if c == nchunks-1:
-            b = -1
-        else:
-            b = (c+1)*chunk_size
-            
-        print(f"{a}, {b}")
-        
-        chunks.append( [P[a:b], 
-                        tmat_file, 
-                        niter, h_friction,
-                        a, b] )
 
-    solution = np.zeros([nxo*nyo, niter+1])
-    with Pool() as p:
-        
-        # Initialize a tqdm progress bar
-        with tqdm.tqdm(total=len(chunks)) as pbar:
-            
-            # Loop through the mapped calculations on the parallel pool
-            for i, result in enumerate(p.imap(_gelfgat_poisson, chunks)):
-                
-                # Store the result
-                a = chunks[i][-2]
-                b = chunks[i][-1]
-                solution[ a:b, :] = result
-                
-                # Update the progress bar that this iteration is done
-                pbar.update()
-                
-    print(solution.shape)
-    
-    return solution
-""" 
+from scipy.stats import chi2
 
 
 def gelfgat_poisson(P, T, niter, h_friction=3):
@@ -103,7 +45,6 @@ def gelfgat_poisson(P, T, niter, h_friction=3):
     h = np.zeros(niter)
     logL = np.zeros(niter)
     chisq = np.zeros(niter)
-    DOFs = np.zeros(niter)
     
     zeno_step = 2
     
@@ -138,9 +79,52 @@ def gelfgat_poisson(P, T, niter, h_friction=3):
             
             chisq[i] = np.sum(P)*np.sum( (Pguess - Pnorm)**2/Pguess)
             
-            DOFs[i] = np.sum(B[i, :] / (B[i, :] + 1/B[i, :].size))
-            
             pbar.update()
 
         
-    return B, logL, chisq, DOFs
+    return B, logL, chisq
+
+
+
+def calculate_termination(B, logL):
+    """
+    Given the results of a reconstruction, determine the ideal termination
+    index
+    """
+    
+    
+    niter = B.shape[0]
+    
+    # Estimate the DOF
+    DOF = np.zeros(niter) 
+    for i in range(niter):
+        img = B[i,:] / np.sum(B[i,:])
+        DOF[i] = np.sum(img / (img + 1/img.size))
+        
+    DOF_asymptotic = DOF[-1]
+    
+    
+    
+        
+        
+    # Likelihood ratio at each iteration
+    likelihood_ratio = -2*(logL - logL[-1])
+    
+    termination_condition = chi2.cdf(likelihood_ratio, DOF_asymptotic)
+    
+    import matplotlib.pyplot as plt
+    
+    fig, ax = plt.subplots()
+    ax.set_title("LogL")
+    ax.plot(logL)
+    
+    fig, ax = plt.subplots()
+    ax.set_title("DOF")
+    ax.plot(DOF)
+    
+    fig, ax = plt.subplots()
+    ax.set_title("Termination Condition")
+    ax.plot(termination_condition)
+    
+    return  np.argmin(np.abs(termination_condition - 0.5))
+    
