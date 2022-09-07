@@ -1,11 +1,12 @@
 import numpy as np
 
 import h5py
-from multiprocessing import Pool
 import tqdm
 
 from scipy.stats import chi2
 
+
+from cached_property import cached_property
 
 def gelfgat_poisson(P, T, niter, h_friction=3):
     """
@@ -89,45 +90,148 @@ def gelfgat_poisson(P, T, niter, h_friction=3):
 
 
 
-def calculate_termination(B, logL):
-    """
-    Given the results of a reconstruction, determine the ideal termination
-    index
-    """
+
+
+
+class GelfgatResult:
     
-    
-    niter = B.shape[0]
-    
-    # Estimate the DOF
-    DOF = np.zeros(niter) 
-    for i in range(niter):
-        img = B[i,:] / np.sum(B[i,:])
-        DOF[i] = np.sum(img / (img + 1/img.size))
+    def __init__(self, *args):
+        """
+        The results of a Gelfgat reconstruction
+
+        Parameters (1)
+        --------------
         
-    DOF_asymptotic = DOF[-1]
-    
-    
-    
+        path : str
+            Path to a reconstruction save file 
+            
+            
+            
+        Paramters (5)
+        -------------
+        
+        B : np.ndarray (nxo, nyo, iter)
+            Results from each step of the reconstruction
+            
+        logL : np.ndarray (niter)
+            The log likelihood at each step of the reconstruction.
+        
+        chisq : np.ndarray (niter)
+            The chi squared at each step of the reconstruction.
+            
+            
+        background : np.ndarray (niter)
+            The value of the background pixel at each step of the 
+            reconstruction. The background pixel is a constant value added
+            to every pixel in the image plane.
+            
+            
+        initial_guess : np.ndarray (nxo, nyo)
+            The initial guess for the object. Usually uniform.
+        
+        """
+        
+        # These variables record a string that describes the algorithm used
+        # to calculate the DOF and termination condition
+        self.termination_algorithm = "None"
+        self.DOF_algorithm = "None"
         
         
-    # Likelihood ratio at each iteration
-    likelihood_ratio = -2*(logL - logL[-1])
+        if len(args) == 1:
+            self.load(args[0])
+            
+        elif len(args) == 5:
+            (self.B, self.logL, self.chisq, 
+             self.background, self.initial_guess) = args
+            
+        else:
+            raise ValueError(f"Invalid number of arguments: {len(args)}")
+            
+            
+    def save(self, path):
+        """
+        Saves the reconstruction object to an h5 file.
+
+        """
+        
+        with h5py.File(path, 'a') as f:
+            f['B'] = self.B
+            f['logL'] = self.logL
+            f['chisq'] = self.chisq
+            f['background'] = self.background
+            f['initial_guess'] = self.initial_guess
+
+            f['DOF'] = self.DOF
+            f['DOF'].attrs['algorithm'] = self.DOF_algorithm
+            f['termination_condition'] = self.termination_condition
+            f['termination_condition'].attrs['algorithm'] = self.termination_algorithm
+            f['termination_ind'] = self.termination_ind     
+            
+            
+    def load(self, path):
+        """
+        Loads a reconstruction object from an h5 file. 
+        
+        Properties are not loaded - they will be re-calculated when called
+        """
+        
+        with h5py.File(path, 'r') as f:
+            self.B = f['B'][...]
+            self.logL = f['logL'][...]
+            self.chisq = f['chisq'][...]
+            self.background = f['background'][...]
+            self.initial_guess = f['initial_guess'][...]
+            
+            
+    @cached_property
+    def DOF(self):
+        """
+        The estimated degrees of freedom at each step of the reconstruction
+
+        """
+        self.DOF_algorithm = 'sum(img / (img + 1/img.size) )'
+        
+        niter = self.B.shape[0]
+        
+        # Estimate the DOF
+        DOF = np.zeros(niter) 
+        for i in range(niter):
+            img = self.B[i,:] / np.sum(self.B[i,:])
+            DOF[i] = np.sum(img / (img + 1/img.size))
+        return DOF
     
-    termination_condition = chi2.cdf(likelihood_ratio, DOF_asymptotic)
-    
-    import matplotlib.pyplot as plt
-    
-    fig, ax = plt.subplots()
-    ax.set_title("LogL")
-    ax.plot(logL)
-    
-    fig, ax = plt.subplots()
-    ax.set_title("DOF")
-    ax.plot(DOF)
-    
-    fig, ax = plt.subplots()
-    ax.set_title("Termination Condition")
-    ax.plot(termination_condition)
-    
-    return  np.argmin(np.abs(termination_condition - 0.5))
+    @cached_property
+    def DOF_asymptotic(self):
+        """
+        The DOF based on the last step of the reconstruction.
+        """
+        img = self.B[-1,:] / np.sum(self.B[-1,:])
+        return np.sum(img / (img + 1/img.size))
+        
+        
+            
+    @cached_property
+    def termination_condition(self):
+        """
+        The termination condition at each step of the reconstruction.
+        """
+        self.termination_algorithm = "chi2.cdf(likelihood ratio, DOF_asymptotic)"
+        
+        # Likelihood ratio at each iteration
+        likelihood_ratio = -2*(self.logL - self.logL[-1])
+        
+        termination_condition = chi2.cdf(likelihood_ratio, self.DOF_asymptotic)
+        
+        return termination_condition
+        
+    @cached_property
+    def termination_ind(self):
+        """
+        Calculates the termination index
+        """
+        
+        return np.argmin(np.abs(self.termination_condition - 0.5))
+        
+
+
     
