@@ -128,6 +128,7 @@ class GelfgatResult:
         B : np.ndarray (nxo, nyo, iter)
             Results from each step of the reconstruction
             
+            
         logL : np.ndarray (niter)
             The log likelihood at each step of the reconstruction.
         
@@ -162,40 +163,72 @@ class GelfgatResult:
         else:
             raise ValueError(f"Invalid number of arguments: {len(args)}")
             
+        
             
-    def save(self, path):
+    def save(self, grp):
+        """
+        Save the data into an h5 group
+          
+        grp : h5py.Group or path string
+            The location to save the h5 data. This could be the root group
+            of its own h5 file, or a group within a larger h5 file.
+              
+            If a string is provided instead of a group, try to open it as
+            an h5 file and create the group there
+          
+        """
+        if isinstance(grp, str):
+            with h5py.File(grp, 'a') as f:
+                self._save(f)
+        else:
+            self._save(grp)
+               
+    def load(self, grp):
+           """
+           Load object from a file or hdf5 group
+           
+           grp : h5py.Group 
+               The location from which to load the h5 data. This could be the 
+               root group of its own h5 file, or a group within a larger h5 file.
+           
+           """
+           if isinstance(grp, str):
+               with h5py.File(grp, 'r') as f:
+                   self._load(f)
+           else:
+               self._load(grp)
+            
+
+    def _save(self, f):
         """
         Saves the reconstruction object to an h5 file.
 
         """
-        
-        with h5py.File(path, 'a') as f:
-            f['B'] = self.B
-            f['logL'] = self.logL
-            f['chisq'] = self.chisq
-            f['background'] = self.background
-            f['initial_guess'] = self.initial_guess
+        f['B'] = self.B
+        f['logL'] = self.logL
+        f['chisq'] = self.chisq
+        f['background'] = self.background
+        f['initial_guess'] = self.initial_guess
 
-            f['DOF'] = self.DOF
-            f['DOF'].attrs['algorithm'] = self.DOF_algorithm
-            f['termination_condition'] = self.termination_condition
-            f['termination_condition'].attrs['algorithm'] = self.termination_algorithm
-            f['termination_ind'] = self.termination_ind     
+        f['DOF'] = self.DOF
+        f['DOF'].attrs['algorithm'] = self.DOF_algorithm
+        f['termination_condition'] = self.termination_condition
+        f['termination_condition'].attrs['algorithm'] = self.termination_algorithm
+        f['termination_ind'] = self.termination_ind     
             
             
-    def load(self, path):
+    def _load(self, f):
         """
         Loads a reconstruction object from an h5 file. 
         
         Properties are not loaded - they will be re-calculated when called
         """
         
-        with h5py.File(path, 'r') as f:
-            self.B = f['B'][...]
-            self.logL = f['logL'][...]
-            self.chisq = f['chisq'][...]
-            self.background = f['background'][...]
-            self.initial_guess = f['initial_guess'][...]
+        self.B = f['B'][...]
+        self.logL = f['logL'][...]
+        self.chisq = f['chisq'][...]
+        self.background = f['background'][...]
+        self.initial_guess = f['initial_guess'][...]
             
             
     @cached_property
@@ -254,6 +287,9 @@ class GelfgatResult:
         """
         
         return np.argmin(np.abs(self.termination_condition - 0.5))
+    
+    
+    
         
 
 

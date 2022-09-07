@@ -10,13 +10,17 @@ data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
 obj = XrayIP(103955, data_dir=data_dir, pinholes='D-PF-C-055_A')
 
 
+
+
+
+ALL UNITS CM
+
+
 """
 
 import numpy as np
 
 import h5py
-
-import astropy.units as u
 
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Cursor
@@ -117,7 +121,10 @@ class PinholeArray:
      
         """
         # Make plots appear in new windows
-        get_ipython().run_line_magic('matplotlib', 'inline')
+        # If statement guards against running outside of ipython
+        # TODO: support plots outside of iPython...
+        if get_ipython() is not None:
+            get_ipython().run_line_magic('matplotlib', 'inline')
         
         
         self.plots = plots
@@ -251,12 +258,12 @@ class PinholeArray:
     
         # Write pinhole information
         info_grp = grp.create_group('pinhole_info')
-        info_grp['id'] = self.id
-        info_grp['diameter'] = self.diameter.to(u.um).value
-        info_grp['diameter'].attrs['unit'] = 'um'
-        info_grp['material'] = self.material
-        info_grp['thickness'] = self.thickness.to(u.um).value
-        info_grp['thickness'].attrs['unit'] = 'um'
+        info_grp['id'] = str(self.id)
+        info_grp['diameter'] = self.diameter
+        info_grp['diameter'].attrs['unit'] = 'cm'
+        info_grp['material'] = str(self.material)
+        info_grp['thickness'] = self.thickness
+        info_grp['thickness'].attrs['unit'] = 'cm'
         info_grp['xy_prime'] = self.xy_prime
          
         # Save the pinhole fit + selection parameters
@@ -271,7 +278,7 @@ class PinholeArray:
         
         
         if self.mag_r is not None: 
-            grp['mag_r'] = self.mag_r
+            grp['mag_r'] = float(self.mag_r)
 
     def load(self, grp):
            """
@@ -297,17 +304,16 @@ class PinholeArray:
         # Load pinhole information
         info_grp = grp['pinhole_info']
         self.id = str(info_grp['id'][...])
-        self.diameter = info_grp['diameter'][...] * u.um
-        self.material = info_grp['material'][...]
-        self.thickness = info_grp['thickness'][...] * u.um
+        self.diameter = info_grp['diameter'][...] 
+        self.material = str(info_grp['material'][...])
+        self.thickness = info_grp['thickness'][...] 
         self.xy_prime = info_grp['xy_prime'][...]
         
         
         # Save the pinhole fit + selection parameters
         adjustment_grp = grp['adjustment']
         for key,val in self.adjustment.items():
-            print(key)
-            self.adjustment[key] = adjustment_grp[key]
+            self.adjustment[key] = adjustment_grp[key][...]
             
         self.xy = grp['xy'][...] 
         self.use_for_fit = grp['use_for_fit'][...]
@@ -316,13 +322,14 @@ class PinholeArray:
          
          
         if 'mag_r' in grp.keys():
-            self.mag_r = grp['mag_r']
+            self.mag_r = float(grp['mag_r'][...])
         else:
             self.mag_r = None
             
         self._init_pinhole_variables()
-            
-            
+        
+
+        
 
     
     @property
@@ -416,6 +423,7 @@ class PinholeArray:
         
         
         """
+        
         # Perform rough adjustment
         if auto_rough_adjust:
             raise NotImplementedError("Automatic rough adjustment is not yet implemented")
@@ -443,7 +451,7 @@ class PinholeArray:
             
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
-            border = -0.25
+            border = -0.25 # cm
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
@@ -476,9 +484,9 @@ class PinholeArray:
         """
         
         # Ensure inline plotting
-        get_ipython().run_line_magic('matplotlib', 'inline')
+        if get_ipython() is not None:
+            get_ipython().run_line_magic('matplotlib', 'inline')
         
-        #self.plot_with_data(xaxis, yaxis, data)
                
         state = {'dx':0, 'dy':0, 'rot':0, 'mag_s':1, 
                  'skew':1, 'skew_angle':0,
@@ -558,7 +566,7 @@ class PinholeArray:
             use = self.use_for_fit
         elif variable == 'stack':
             use = self.use_for_stack
-        
+
         # Auto-exclude apertures that are not within the current bounds
         use = (use *
                 (self.xy[:,0] > np.min(xaxis) + border ) *
@@ -649,7 +657,8 @@ class PinholeArray:
     
         # Switch back to inline plotting so as to not disturb the console 
         # plots
-        get_ipython().run_line_magic('matplotlib', 'inline')
+        if get_ipython() is not None:
+            get_ipython().run_line_magic('matplotlib', 'inline')
 
 
     def _fit_penumbra(self, xaxis, yaxis, data, plots=True):
@@ -675,8 +684,8 @@ class PinholeArray:
         """
         
         
-        width = 1.3*(self.mag_s*0.5*self.diameter.to(u.cm).value)
-        radius = self.diameter.to(u.cm).value/2
+        width = 1.3*self.mag_s*0.5*self.diameter
+        radius = self.diameter/2
         
         
         use_ind = [i for i,v in enumerate(self.use_for_fit) if v==1]
@@ -696,10 +705,7 @@ class PinholeArray:
             xb = np.argmin(np.abs(xaxis - (self.xy[ind,0] + width)))
             ya = np.argmin(np.abs(yaxis - (self.xy[ind,1] - width)))
             yb = np.argmin(np.abs(yaxis - (self.xy[ind,1] + width)))
-            
-            print(self.xy[ind,:])
-            print(f"{xa}, {xb}, {ya}, {yb}")
-            
+
                     
             # Cut out the subregion, make an array of axes for the points
             arr = data[xa:xb, ya:yb]
@@ -791,7 +797,7 @@ class PinholeArray:
                 ax.legend()
                 plt.show()
             
-        self.mag_r = np.mean(mag_r)
+        self.mag_r = float(np.mean(mag_r))
         
 
     
@@ -840,7 +846,8 @@ class PinholeArray:
         # Try running these fits in a loop to iterate on skew vs rotation+mag?
 
         print("...Fitting translation, rotation, and magnification")
-        model = lambda args: _pinhole_array_model(xy_nom, self.pinhole_centers,
+        model = lambda args: _pinhole_array_model(xy_nom, 
+                                                  self.pinhole_centers,
                                                   *args, *p[4:])
         guess = p[0:4]
         res = minimize(model, guess, bounds=bounds[0:4])
@@ -848,7 +855,8 @@ class PinholeArray:
         print(p)
         
         print("...Fitting skew and skew angle")
-        model = lambda args: _pinhole_array_model(xy_nom, self.pinhole_centers,
+        model = lambda args: _pinhole_array_model(xy_nom, 
+                                                  self.pinhole_centers,
                                                   *p[0:4], *args, *p[6:])
         guess = p[4:6]
         res = minimize(model, guess, bounds=bounds[4:6])
@@ -861,8 +869,10 @@ class PinholeArray:
                              vreflect=p[7])
         
         
-        error = np.sqrt( (self.xy[self.use_for_fit, 0]- self.pinhole_centers[:,0])**2 +
-                                (self.xy[self.use_for_fit, 1]- self.pinhole_centers[:,1])**2 )
+        error = np.sqrt( (self.xy[self.use_for_fit, 0]- 
+                          self.pinhole_centers[:,0])**2 +
+                                (self.xy[self.use_for_fit, 1]- 
+                                 self.pinhole_centers[:,1])**2 )
         
         print(f"Pinhole fit max error: {np.max(error)*1e4:.2} um")
         print(f"Pinhole fit mean error: {np.mean(error)*1e4:.2} um")
@@ -912,7 +922,7 @@ class PinholeArray:
             
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
-            border = -0.25
+            border = -0.25 # cm
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
@@ -925,7 +935,7 @@ class PinholeArray:
             
         
         if width is None:
-            width = 1.5*(self.mag_s*self.diameter.to(u.cm).value)
+            width = 1.5*(self.mag_r*self.diameter)
             
         # Calculate the half-width in pixels
         dx = np.mean(np.gradient(xaxis))
@@ -999,6 +1009,9 @@ class PinholeArray:
         ax.pcolormesh(xaxis, yaxis,
                       data.T, vmax=10*np.median(data))
         
+        ax.set_xlabel("X (cm)")
+        ax.set_ylabel("Y (cm)")
+        
         ax.set_xlim(np.min(xaxis), np.max(xaxis))
         ax.set_ylim(np.min(yaxis), np.max(yaxis))
         
@@ -1016,7 +1029,7 @@ class PinholeArray:
                        self.pinhole_centers[:,1],  color='black',
                        marker='x')
             
-            radius = self.diameter.to(u.cm).value/2
+            radius = self.diameter/2
             for i in range(self.pinhole_centers.shape[0]):
                 circle = plt.Circle((self.pinhole_centers[i,0], 
                                      self.pinhole_centers[i,1]),  
@@ -1102,9 +1115,9 @@ def pinhole_array_info(name):
             
         xy = xy[keep, :]
         
-        diameter = 0.03*u.cm
+        diameter = 0.03 # cm
         material = 'Ta';
-        thickness = 0.02*u.cm
+        thickness = 0.02 # cm
         
         
         return  xy, spacing, diameter, material, thickness
