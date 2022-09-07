@@ -14,10 +14,10 @@ import h5py
 
 import matplotlib.pyplot as plt
 
-from panoptes.tmat.tmat import TransferMatrix, calculate_tmat
-from panoptes.pinholes import _penumbra_model
+from panoptes.tmat.tmat import TransferMatrix
 
-from scipy.optimize import fmin, curve_fit
+
+from scipy.optimize import  curve_fit
 
 
 
@@ -68,54 +68,50 @@ class TestSingleApertureTmat1:
     def __init__(self, tmp_path):
         
         self.path = tmp_path
-        print(self.path)
         
-        self.ishape= (201, 201)
-        self.oshape=(41,41)
+        ishape= (201, 201)
+        oshape=(41,41)
         
 
-        self.mag = 30
-        self.R_ap = 50*u.um
-        self.L_det = 350*u.cm
+        mag = 30
+        R_ap = 50*u.um
+        L_det = 350*u.cm
         
-        xo = np.linspace(-0.015, 0.015, num=self.oshape[0])*u.cm / self.R_ap
-        yo=np.linspace(-0.015, 0.015, num=self.oshape[1])*u.cm / self.R_ap
-        xi = np.linspace(-0.6,0.6, num=self.ishape[0])*u.cm / self.R_ap / self.mag
-        yi=np.linspace(-0.6,0.6, num=self.ishape[1])*u.cm / self.R_ap / self.mag
+        xo = np.linspace(-0.015, 0.015, num=oshape[0])*u.cm / R_ap
+        yo=np.linspace(-0.015, 0.015, num=oshape[1])*u.cm / R_ap
+        xi = np.linspace(-0.6,0.6, num=ishape[0])*u.cm / R_ap / mag
+        yi=np.linspace(-0.6,0.6, num=ishape[1])*u.cm / R_ap / mag
         
-        ap_xy = np.array([[0,0]])*u.cm / self.R_ap
+        ap_xy = np.array([[0,0]])*u.cm / R_ap
         
         psf = np.concatenate((np.ones(50), np.zeros(50)))
-        psf_ax = np.linspace(0, 2*self.R_ap, num=100) / self.R_ap
+        psf_ax = np.linspace(0, 2*R_ap, num=100) / R_ap
         
         
-        self.tmat_obj = TransferMatrix(tmp_path)
-        self.tmat_obj.set_constants(xo, yo, xi, yi, self.mag, ap_xy, psf=psf, psf_ax=psf_ax)
-        self.tmat_obj.set_dimensions(self.R_ap, self.L_det)
-        self.tmat_obj.save()
-        calculate_tmat(self.tmat_obj)
+        self.tmat = TransferMatrix(xo, yo, xi, yi, mag, ap_xy, psf, psf_ax, 
+                                   R_ap, L_det)
         
-        with h5py.File(self.path, 'r') as f:
-            self.tmat = f['tmat'][...]
+        self.tmat.calculate_tmat(path=tmp_path)
         
         
-        self.xo_scaled = self.tmat_obj.xo_scaled.to(u.um).value
-        self.yo_scaled = self.tmat_obj.yo_scaled.to(u.um).value
+        
+        self.xo_scaled = self.tmat.xo_scaled.to(u.um).value
+        self.yo_scaled = self.tmat.yo_scaled.to(u.um).value
         self.dxo = np.mean(np.gradient(self.xo_scaled))
         
-        self.xi_scaled = self.tmat_obj.xi_scaled.to(u.cm).value
-        self.yi_scaled = self.tmat_obj.yi_scaled.to(u.cm).value
+        self.xi_scaled = self.tmat.xi_scaled.to(u.cm).value
+        self.yi_scaled = self.tmat.yi_scaled.to(u.cm).value
         self.dxi = np.mean(np.gradient(self.xi_scaled))
         
 
         # Create some objects and images
         
-        """
+    
         # ********************************************************************
         # Test 1: single centered aperture
-        self.obj1 = np.zeros(self.oshape)
-        self.obj1[10, 10] = 1
-        self.img1 = _tmat_mult(self.tmat, self.obj1, self.ishape)
+        self.obj1 = np.zeros(self.tmat.oshape)
+        self.obj1[20, 20] = 1
+        self.img1 = _tmat_mult(self.tmat.tmat, self.obj1, self.tmat.ishape)
         
         fig, ax = plt.subplots()
         ax.plot(self.xi_scaled, np.sum(self.img1, axis=-1))
@@ -139,20 +135,22 @@ class TestSingleApertureTmat1:
         
         x0, y0, r = _fit_img(self.xi_scaled, self.yi_scaled, self.img1)
        
-        mag = (r/self.R_ap.to(u.cm).value)
+        mag = (r/self.tmat.R_ap.to(u.cm).value)
+        print(r)
+        print(self.tmat.R_ap)
         print(mag)
        
         
         assert (np.abs(x0) < self.dxi and np.abs(y0) < self.dxi)
         assert np.isclose(mag, 30, rtol=0.01)
-        """
+     
         
         # ********************************************************************
         # Test 1: single off center aperture
-        self.obj2 = np.zeros(self.oshape)
+        self.obj2 = np.zeros(self.tmat.oshape)
         i, j = np.argmin(np.abs(self.xo_scaled - 50)), np.argmin(np.abs(self.yo_scaled - 0))
         self.obj2[i,j] = 1
-        self.img2 = _tmat_mult(self.tmat, self.obj2, self.ishape)
+        self.img2 = _tmat_mult(self.tmat.tmat, self.obj2, self.tmat.ishape)
         
         fig, axarr = plt.subplots(nrows=2)
         fig.subplots_adjust(hspace=0.4)
@@ -172,7 +170,7 @@ class TestSingleApertureTmat1:
         
         x0, y0, r = _fit_img(self.xi_scaled, self.yi_scaled, self.img2)
         
-        mag = (r/self.R_ap.to(u.cm).value)
+        mag = (r/self.tmat.R_ap.to(u.cm).value)
 
         assert  np.abs(y0) < self.dxi
         assert np.isclose(mag, 30, rtol=0.01)

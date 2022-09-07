@@ -14,8 +14,8 @@ import h5py
 
 import matplotlib.pyplot as plt
 
-from panoptes.tmat.tmat import TransferMatrix, calculate_tmat
-from panoptes.reconstruction.gelfgat import gelfgat_poisson, calculate_termination
+from panoptes.tmat.tmat import TransferMatrix
+from panoptes.reconstruction.gelfgat import gelfgat_poisson
 
 from scipy.optimize import fmin, curve_fit
 
@@ -48,21 +48,12 @@ def make_tmat(path):
     psf_ax = np.linspace(0, 2*R_ap, num=100) / R_ap
     
     
-    tmat_obj = TransferMatrix(tmp_path)
-    tmat_obj.set_constants(xo, yo, xi, yi, mag, ap_xy, psf=psf, psf_ax=psf_ax)
-    tmat_obj.set_dimensions(R_ap, L_det)
-    tmat_obj.save()
-    calculate_tmat(tmat_obj)
+    tmat = TransferMatrix(xo, yo, xi, yi, mag, ap_xy, psf, psf_ax, R_ap, L_det)
+    tmat.calculate_tmat(path=path)
     
-
-
-
-def load_tmat(path):
-    with h5py.File(path, 'r') as f:
-        tmat = f['tmat'][...]
-        
     return tmat
 
+    
 
 
 def resolution_wedges():
@@ -155,8 +146,6 @@ def particleify(image, nparticles, background_fract):
 
 def test_reconstruction(tmat):
     
-    print(tmat.shape)
-    
     oshape = (21, 21)
     ishape = (101, 101)
     
@@ -184,7 +173,10 @@ def test_reconstruction(tmat):
                   yo.to(u.um).value, 
                   obj.T)
     
-    img = _tmat_mult(tmat, obj, ishape)
+    
+    
+    
+    img = _tmat_mult(tmat.tmat, obj, ishape)
     
     
     fig, ax = plt.subplots()
@@ -194,22 +186,18 @@ def test_reconstruction(tmat):
     
     # Reconstruct
     print("Running Reconstruction")
-    B, logL, chisq, background = gelfgat_poisson(img.flatten(), tmat, 100)
-    ind = calculate_termination(B, logL)
+    result = gelfgat_poisson(img.flatten(), tmat, 100)
+    ind = result.termination_ind
     
-    print(background)
-    print(f"Reconstructed background: {background[ind]:.1e}")
+    print(result.background)
+    print(f"Reconstructed background: {result.background[ind]:.1e}")
     print(f"True Background: {true_background:.1e}")
     
     
     
+
     
-    
-    
-    
-    
-    
-    sol = np.reshape(B[ind, :], oshape)
+    sol = result.solution
   
     fig, ax = plt.subplots()
     ax.set_title(f"Termination iter {ind+1}")
@@ -217,16 +205,10 @@ def test_reconstruction(tmat):
     ax.pcolormesh(sol.T)
     
     
-    
-    
-    
-    
+
     sol_norm = sol/ np.sum(sol)
     
-    
-    
-    
-    
+
     error = np.sum((objarr_norm[nonzero]-sol_norm[nonzero])**2  / objarr_norm[nonzero]**2  )
     print(error)
     
@@ -242,7 +224,10 @@ if __name__ == '__main__':
     
     if not os.path.isfile(tmp_path):
         tmat = make_tmat(tmp_path)
-    tmat = load_tmat(tmp_path)
+        
+    else:
+        tmat = TransferMatrix(tmp_path)
+    
     
     test_reconstruction(tmat)
     

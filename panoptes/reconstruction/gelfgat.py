@@ -8,15 +8,16 @@ from scipy.stats import chi2
 
 from cached_property import cached_property
 
-def gelfgat_poisson(P, T, niter, h_friction=3):
+def gelfgat_poisson(P, tmat, niter, h_friction=3):
     """
     Parameters
     ----------
     P : ndarray
         Data as a 1D vector length J*K
-    T : np.ndarray
-        Transfer matrix as a 2D vector, with shape [M*N, J*K]
-        or [Image, Object]
+        
+    T : TransferMatrix object
+        The transfer matrix
+        
     niter : int
         Number of interations to calculate
         
@@ -25,12 +26,16 @@ def gelfgat_poisson(P, T, niter, h_friction=3):
         will oscillate wildly and the logL can decrease.
         
     """
+
+    print("Loading transfer matrix")
+    T = tmat.tmat
     
-    ishape = T.shape[0]
-    oshape = T.shape[1]
+    print("Performing reconstruction")
+
 
     # Initial guess is uniform
-    Bnew = np.ones(oshape)
+    # Add one pixel to the object plane for the background pixel
+    Bnew = np.ones(tmat.osize+1)
     Bnew = Bnew/np.sum(Bnew) # Normalize Bnew
 
     # Normalize the transfer matrix to the image plane, not including any
@@ -81,12 +86,22 @@ def gelfgat_poisson(P, T, niter, h_friction=3):
             chisq[i] = np.sum(P)*np.sum( (Pguess - Pnorm)**2/Pguess)
             
             pbar.update()
-
+            
+            
+    # Remove the initial guess, which is stored as the first iteration
+    # Remove the backround pixel from this image
+    initial_guess = B[0, :-1]
+    B = B[1:, :]
+    
     # Remove the background pixel 
     background = B[:, -1]
     B = B[:, :-1]
-
-    return B, logL, chisq, background
+   
+    # Reshape B, initial_guess to be 2D in the object plane
+    B  = np.reshape(B.T, (*tmat.oshape, niter))
+    initial_guess = np.reshape(initial_guess, tmat.oshape)
+    
+    return GelfgatResult(B, logL, chisq, background, initial_guess)
 
 
 
@@ -181,6 +196,14 @@ class GelfgatResult:
             self.chisq = f['chisq'][...]
             self.background = f['background'][...]
             self.initial_guess = f['initial_guess'][...]
+            
+            
+    @cached_property
+    def solution(self):
+        """
+        The reconstruction at the termination index
+        """
+        return self.B[:, :, self.termination_ind]
             
             
     @cached_property
