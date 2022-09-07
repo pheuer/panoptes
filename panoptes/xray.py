@@ -457,6 +457,23 @@ class XrayIP:
         self.reconstruction = gelfgat_poisson(data.flatten(), tmat, 50, h_friction=3)
         
         
+    def plot_reconstruction(self):
+        
+        if self.reconstruction is None:
+            raise ValueError("Run reconstruction first!")
+            
+        
+        xo = self.tmat.xo_scaled.to(u.um).value
+        yo = self.tmat.yo_scaled.to(u.um).value
+        img = self.reconstruction.solution
+        
+        
+        fig, ax = plt.subplots()
+        ax.pcolormesh(xo, yo, img.T)
+        ax.set_aspect('equal')
+        ax.set_xlabel("X (um)")
+        ax.set_ylabel("Y (um)")        
+        
         
     
    
@@ -512,6 +529,7 @@ if __name__ == '__main__':
         
     obj = XrayIP(save_path)
     obj.reconstruction.iter_plot()
+    obj.plot_reconstruction()
     
     
     
