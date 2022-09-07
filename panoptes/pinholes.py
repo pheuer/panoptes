@@ -98,11 +98,11 @@ def _adjust_xy(xy, dx, dy, rot, mag_s, skew, skew_angle, hreflect, vreflect):
 
 class PinholeArray:
     
-    def __init__(self, arg, plots=False):
+    def __init__(self, *args, pinhole_name=None, plots=False):
         """
         arg : str
             Either a path to a file from which the pinhole can be loaded 
-            or a pinhole array ID
+            or nothing
         
         Notes
         -----
@@ -122,14 +122,47 @@ class PinholeArray:
         
         self.plots = plots
         
-        # First we will check to see if the pinhole is defined
-        self._defined_pinhole(arg)
+        
+        # Sto
+        self.mag_r = None
+        
+        # Optimal adjustment for the pinhole array
+        self.adjustment = {'dx':0, 'dy':0, 'rot':0, 'mag_s':1, 
+                           'skew':1, 'skew_angle':0,
+                           'hreflect':0, 'vreflect':0}
         
         
-        # If not, assume the argument is a path to a text file with
-        # the pinhole info in it.
+        
+        if len(args) == 0:
+            pass
+        elif len(args) == 1:
+            self.path = args[0]
+            self.load(self.path)
+        else:
+            raise ValueError(f"Invalid number of arguments: {len(args)}")
+            
         
         
+ 
+        
+       
+        
+        
+
+        
+            
+        
+    # *************************************************************************
+    # Basic methods
+    # *************************************************************************
+            
+    def set_pinhole_array(self, pinhole_name):
+        self._defined_pinhole(pinhole_name)
+        
+        self._init_pinhole_variables()
+        
+        
+    def _init_pinhole_variables(self):
         # Indices of pinholes to use for fitting the array model
         self.use_for_fit = np.ones(self.npinholes).astype(bool)
         # Indices of pinholes to stack
@@ -139,22 +172,10 @@ class PinholeArray:
         # (determined by fitting each aperture image)
         self.pinhole_centers = self.xy
         
-        # Sto
-        self.mag_r = None
-        
-        # Optimal adjustment for the pinhole array
-        self.adjustment = {'dx':0, 'dy':0, 'rot':0, 'mag_s':1, 
-                           'skew':1, 'skew_angle':0,
-                           'hreflect':0, 'vreflect':0}
-
         if self.plots:
             self.plot()
-            
-            
-    # *************************************************************************
-    # Basic methods
-    # *************************************************************************
-            
+        
+    
             
     def __getattr__(self, key):
         if key in self.adjustment.keys():
@@ -227,7 +248,7 @@ class PinholeArray:
         """
         See docstring for "save"
         """
-        
+    
         # Write pinhole information
         info_grp = grp.create_group('pinhole_info')
         info_grp['id'] = self.id
@@ -244,7 +265,8 @@ class PinholeArray:
             adjustment_grp[key] = val
             
         grp['xy'] = self.xy
-        grp['use'] = self.use_for_fit
+        grp['use_for_fit'] = self.use_for_fit
+        grp['use_for_stack'] = self.use_for_stack
         grp['pinhole_centers'] = self.pinhole_centers
         
         
@@ -274,20 +296,22 @@ class PinholeArray:
         
         # Load pinhole information
         info_grp = grp['pinhole_info']
-        self.id = str(info_grp['id'])
-        self.diameter = info_grp['diameter'] * u.um
-        self.material = info_grp['material']
-        self.thickness = info_grp['thickness'] * u.um
+        self.id = str(info_grp['id'][...])
+        self.diameter = info_grp['diameter'][...] * u.um
+        self.material = info_grp['material'][...]
+        self.thickness = info_grp['thickness'][...] * u.um
         self.xy_prime = info_grp['xy_prime'][...]
         
         
         # Save the pinhole fit + selection parameters
         adjustment_grp = grp['adjustment']
-        for val, key in self.adjustment:
+        for key,val in self.adjustment.items():
+            print(key)
             self.adjustment[key] = adjustment_grp[key]
             
         self.xy = grp['xy'][...] 
-        self.use_for_fit = grp['use'][...]
+        self.use_for_fit = grp['use_for_fit'][...]
+        self.use_for_stack = grp['use_for_stack'][...]
         self.pinhole_centers = grp['pinhole_centers'][...]
          
          
@@ -296,15 +320,16 @@ class PinholeArray:
         else:
             self.mag_r = None
             
+        self._init_pinhole_variables()
+            
             
 
     
-        
+    @property
+    def npinholes(self):
+        return self.xy.shape[0]
             
-        
-        
-    
-        
+
     def _defined_pinhole(self, id):
         """
         Load data about a defined pinhole array from its id number
@@ -312,9 +337,7 @@ class PinholeArray:
         self.id = id
         
         self.xy, self.spacing, self.diameter, self.material, self.thickness = pinhole_array_info(id)
-        
-        self.npinholes = self.xy.shape[0]
-        
+
         # Store a copy of the unchanged coordinates for reference
         self.xy_prime = np.copy(self.xy) 
         
