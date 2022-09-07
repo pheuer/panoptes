@@ -5,6 +5,8 @@ import tqdm
 
 from scipy.stats import chi2
 
+import matplotlib.pyplot as plt
+
 
 from cached_property import cached_property
 
@@ -88,20 +90,16 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
             pbar.update()
             
             
-    # Remove the initial guess, which is stored as the first iteration
-    # Remove the backround pixel from this image
-    initial_guess = B[0, :-1]
-    B = B[1:, :]
-    
+
     # Remove the background pixel 
     background = B[:, -1]
     B = B[:, :-1]
    
     # Reshape B, initial_guess to be 2D in the object plane
-    B  = np.reshape(B.T, (*tmat.oshape, niter))
-    initial_guess = np.reshape(initial_guess, tmat.oshape)
+    B  = np.reshape(B.T, (*tmat.oshape, niter+1))
+
     
-    return GelfgatResult(B, logL, chisq, background, initial_guess)
+    return GelfgatResult(B, logL, chisq, background)
 
 
 
@@ -125,8 +123,10 @@ class GelfgatResult:
         Paramters (5)
         -------------
         
-        B : np.ndarray (nxo, nyo, iter)
+        B : np.ndarray (nxo, nyo, iter+1)
             Results from each step of the reconstruction
+            
+            The first index of B (iter=0) is the initial guess
             
             
         logL : np.ndarray (niter)
@@ -142,8 +142,6 @@ class GelfgatResult:
             to every pixel in the image plane.
             
             
-        initial_guess : np.ndarray (nxo, nyo)
-            The initial guess for the object. Usually uniform.
         
         """
         
@@ -208,7 +206,6 @@ class GelfgatResult:
         f['logL'] = self.logL
         f['chisq'] = self.chisq
         f['background'] = self.background
-        f['initial_guess'] = self.initial_guess
 
         f['DOF'] = self.DOF
         f['DOF'].attrs['algorithm'] = self.DOF_algorithm
@@ -237,6 +234,11 @@ class GelfgatResult:
         The reconstruction at the termination index
         """
         return self.B[:, :, self.termination_ind]
+    
+
+    @property
+    def niter(self):
+        return self.logL.size
             
             
     @cached_property
@@ -247,12 +249,10 @@ class GelfgatResult:
         """
         self.DOF_algorithm = 'sum(img / (img + 1/img.size) )'
         
-        niter = self.B.shape[0]
-        
         # Estimate the DOF
-        DOF = np.zeros(niter) 
-        for i in range(niter):
-            img = self.B[i,:] / np.sum(self.B[i,:])
+        DOF = np.zeros(self.niter) 
+        for i in range(self.niter):
+            img = self.B[..., i] / np.sum(self.B[..., i])
             DOF[i] = np.sum(img / (img + 1/img.size))
         return DOF
     
@@ -261,7 +261,7 @@ class GelfgatResult:
         """
         The DOF based on the last step of the reconstruction.
         """
-        img = self.B[-1,:] / np.sum(self.B[-1,:])
+        img = self.B[..., -1] / np.sum(self.B[..., -1])
         return np.sum(img / (img + 1/img.size))
         
         
@@ -288,6 +288,32 @@ class GelfgatResult:
         
         return np.argmin(np.abs(self.termination_condition - 0.5))
     
+    
+    def iter_plot(self):
+    
+        fig, ax = plt.subplots()
+        
+        ax.set_xlabel("Iterations")
+
+        ax.plot(self.logL, label='logL', color='black')
+        ax.set_ylabel("LogL")
+        
+        ax2 = ax.twinx()
+        ax2.set_ylabel("DOF")
+        ax2.plot(self.DOF, color='green')
+        ax.plot([], [], color='green', label = 'DOF')
+        ax2.spines.right.set_position(("axes", 1.1))
+        
+        ax3 = ax.twinx()
+        ax3.plot(self.termination_condition, color='orange')
+        ax.plot([], [], color='orange', label='Termination')
+        ax3.set_ylabel("Termination condition")
+        ax3.spines.right.set_position(("axes", 1.3))
+        
+        
+        ax.axvline(self.termination_ind, color='red', linestyle='--', label='Solution')
+        
+        ax.legend(loc='center right')
     
     
         

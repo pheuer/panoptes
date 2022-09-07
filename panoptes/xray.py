@@ -511,7 +511,7 @@ if __name__ == '__main__':
         
         
     obj = XrayIP(save_path)
-    print(obj.reconstruction)
+    obj.reconstruction.iter_plot()
     
     
     
