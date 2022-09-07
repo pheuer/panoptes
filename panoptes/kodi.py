@@ -32,7 +32,9 @@ from scipy.special import erf
 # Make plots appear in new windows
 from IPython import get_ipython
 #get_ipython().run_line_magic('matplotlib', 'qt')
-get_ipython().run_line_magic('matplotlib', 'inline')
+
+if get_ipython() is not None:
+    get_ipython().run_line_magic('matplotlib', 'inline')
 
 
 FrameHeader = namedtuple('FrameHeader', ['number', 'xpos', 'ypos', 
@@ -48,32 +50,11 @@ from panoptes.pinholes import PinholeArray
 
             
 
-class KoDIAnalysis:
+class KoDI:
     
-    kodi_data_dir = os.path.join('//expdiv','kodi','ShotData')
-    kodi_analysis_dir = os.path.join('//expdiv','kodi','ShotAnalysis')
-    
-    
-    def __init__(self, id, data_dir=None, verbose=True):
-        self.verbose = verbose
-        
-        if data_dir is None:
-            self.data_dir = self.kodi_data_dir
-        else:
-            self.data_dir = data_dir
-        self.data_dir = os.path.join(self.data_dir, str(id))
-            
-        # Verify the data_dir exists
-        if not os.path.isdir(self.data_dir):
-            raise ValueError(f"The data directory {self.data_dir} does not exist.")
+    def __init__(self, *args, plots=True):
 
-        # Find the CR39 and x-ray data files        
-        self.cr39_path = find_file(self.data_dir, [ '.cpsa'])
-        self.xray_path = find_file(self.data_dir, ['phosphor', '.hdf'])
-        
-        self._load_xray()
-        
-        #self._load_cr39()
+       
         
         
    
@@ -85,6 +66,12 @@ class KoDIAnalysis:
         
         #xax, yax, arr = self.cr39.frames()
             
+        
+        
+        
+        
+        
+        
             
 if __name__ == '__main__':
     
