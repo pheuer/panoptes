@@ -49,7 +49,7 @@ class XrayIP(XrayDetector2D):
             self.load()
             
         elif filetype == 'OMEGA IP':
-            xaxis, yaxis, data = self._read_data()
+            xaxis, yaxis, data = self.read_data()
             super().__init__(xaxis, yaxis, data)
             
         else:
@@ -60,7 +60,7 @@ class XrayIP(XrayDetector2D):
 
 
 
-    def _read_data(self):
+    def read_data(self):
         """
         Reads data from an OMEGA xray image plate scan file
         """

@@ -189,9 +189,6 @@ class Data2D(Data1D):
         # Save the xaxis and data using the parent Data1D method
         super()._save(grp)
         
-        
-        grp.attrs['class'] = 'Data2D'
-        
         # Extend Data1D by also saving the yaxis
         if self.yaxis is not None:
             
