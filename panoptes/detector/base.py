@@ -7,6 +7,7 @@ Created on Thu Sep  8 09:16:08 2022
 
 import numpy as np
 
+import h5py
 import astropy.units as u
 from abc import ABC, abstractmethod
 import warnings
@@ -21,64 +22,169 @@ from IPython import get_ipython
 
 
 
-class Data(ABC):
+class BaseObject(ABC):
+    """
+    An object with properties that are savable to an HDF5 file or a group
+    within an HDF5 file.
     
-    def __init__(self, *args):
-        pass
-        
-
-    @abstractmethod
+    The _save and _load methods need to be extended in child classes
+    to define exactly what is being loaded and/or saved.
+    
+    """
+    
+    def __init__(self):
+        # The path to the file
+        self.path = None
+        # The group within the h5 file where this is stored.
+        # Defaults to the root group
+        self.group = '/'
+    
+    
     def _save(self, grp):
         """
-        Save this Detector object to an h5 group
+        Save this object to an h5 group
         """
-        ...
         
-    @abstractmethod
+        # Empty the group before saving new data there
+        for key in grp.keys():
+            del grp[key]
+        
+        grp.attrs['class'] = self.__class__.__name__
+        
+        
     def _load(self, grp):
         """
-        Load a Detector object from an h5 group
+        Load an object from an h5 group
         """
-        ...
+        pass
+    
+    
+    def save(self, path, group=None):
+        """
+        Save this object to an h5 file or group within an h5 file
+        """ 
         
-     
+        if isinstance(path, (h5py.File, h5py.Group)):
+            # Store the path 
+            self.path = path.filename
+            self.group = path.name
+            self._save(path)
+                
+        else:
+            self.path = path
+            self.group = '/'
+            with h5py.File(self.path, 'a') as f:
+                if group is not None:
+                    grp = f[group]
+                else:
+                    grp = f
+                
+                self._save(grp)
+
+
+    def load(self, path, group='/'):
+        """
+        Load this object from a file
+        """
+        
+        if isinstance(path, (h5py.File, h5py.Group)):
+            self.path = path.filename
+            # Select a subgroup if the group keyword is used
+            path = path[group]
+            self.group = path.name
+            self._load(path)
+            
+        else:
+            self.path = path
+            self.group = group
+        
+            with h5py.File(self.path, 'r') as f:
+                
+                if group is not None:
+                    grp = f[group]
+                else:
+                    grp = f
+                
+                self._load(grp)
+    
+
+
+
+class Data(BaseObject):
+    
+    def __init__(self, *args):
+        self.data = None
+    
+        if len(args) == 0:
+            pass
+        # If one argument is passed, assume it is a data array OR a filepath
+        # to a object of this type that we can load
+        elif len(args) == 1:
+            if isinstance(args[0], (np.ndarray, u.Quantity)):
+                self.data = args[0]
+            else:
+                self.load(args[0])
+            
+            
         
 class Data1D(Data):
     
     def __init__(self, *args):
         # Default all to None
-        self.super().__init__()
+        super().__init__()
         
         self.xaxis = None
-        self.data = None
-        
+
         # If no arguements are passed, leave as None
         if len(args)==0:
             pass
-        # If one argument is passed, assume it is a data array
+        # If one argument is passed, assume it is a data array OR a filepath
+        # to a object of this type that we can load
         elif len(args)==1:
-            self.data = args[0]
+            super().__init__(args[0])
         # If two arguments are passed, assume they are xaxis and data
         elif len(args)==2:
             self.xaxis = args[0]
             self.data = args[1]
         else:
-            raise ValueError("Invalid number of paramters for class Data1D: "
+            raise ValueError(f"Invalid number of paramters for class "
+                             f"{self.__class__.__name__}:"
                              f"{len(args)}")
             
             
     def _save(self, grp):
         
+        # Call the parent class
+        # in this case, this just saves the class name to the class 
+        # attribute of the group
+        super()._save(grp)
+        
         if self.xaxis is not None:
-            grp['xaxis'] = self.xaxis.to(u.cm).value
-            grp['xaxis'].attrs['unit'] = str(self.xaxis.unit)
+            if isinstance(self.xaxis, u.Quantity):
+                grp['xaxis'] = self.xaxis.to(u.cm).value
+                grp['xaxis'].attrs['unit'] = str(self.xaxis.unit)
+            else:
+                grp['xaxis'] = self.xaxis
+                # u.Unit('') = u.dimensionless_unscaled
+                grp['xaxis'].attrs['unit'] = ''
             
         if self.data is not None:
-            grp['data'] = self.data
-            grp['data'].attrs['unit'] = str(self.data.unit)
+            if isinstance(self.xaxis, u.Quantity):
+                grp['data'] = self.data.value
+                grp['data'].attrs['unit'] = str(self.data.unit)
+            else:
+                grp['data'] = self.data
+                # u.Unit('') = u.dimensionless_unscaled
+                grp['data'].attrs['unit'] = ''
+                
             
             
     def _load(self, grp):
+        
+        # Call the parent class method
+        # currently does nothing
+        super()._load(grp)
+        
         if 'xaxis' in grp.keys():
             
             try:
@@ -114,6 +220,13 @@ class Data1D(Data):
         self.data = self.data[::-1]
         
         
+    @property
+    def dx(self):
+        if self.xaxis is None:
+            raise ValueError("Cannot access property dx because xaxis is None.")
+        
+        return np.mean(np.gradient(self.xaxis))
+        
         
     # TODO: implement subregion methods for Data1D
         
@@ -125,18 +238,19 @@ class Data2D(Data1D):
     def __init__(self, *args):
         
         # Default all to None
-        self.super().__init__()
+        super().__init__()
         self.yaxis = None
         
         # If no arguments are passed, leave it all as None
         if len(args)==0:
             pass
-        # If one argument is passed, assume it is a data array
+        # If one argument is passed, assume it is a filepath to a saved 
+        # copy of this object or data array
         elif len(args)==1:
-            self.super().__init__(args[0])
+            super().__init__(args[0])
         # If three arguments are passed, assume they are x, y, and data
         elif len(args)==3:
-            self.super().__init__(args[0], args[2]) 
+            super().__init__(args[0], args[2]) 
             self.yaxis = args[1]
         else:
             raise ValueError("Invalid number of paramters for class Data2D: "
@@ -145,19 +259,28 @@ class Data2D(Data1D):
     def _save(self, grp):
         
         # Save the xaxis and data using the parent Data1D method
-        self.super()._save(grp)
+        super()._save(grp)
+        
+        
+        grp.attrs['class'] = 'Data2D'
         
         # Extend Data1D by also saving the yaxis
         if self.yaxis is not None:
-            grp['yaxis'] = self.yaxis.to(u.cm).value
-            grp['yaxis'].attrs['unit'] = str(self.yaxis.unit)
+            
+            if isinstance(self.yaxis, u.Quantity):
+                grp['yaxis'] = self.yaxis.to(u.cm).value
+                grp['yaxis'].attrs['unit'] = str(self.yaxis.unit)
+            else:
+                grp['yaxis'] = self.yaxis
+                grp['yaxis'].attrs['unit'] = ''
+            
         
         
         
     def _load(self, grp):
         
         # Load the xaxis and data using the parent Data1D method
-        self.super()._load(grp)
+        super()._load(grp)
             
         
         # Extend Data1D to also load the yaxis
@@ -183,6 +306,14 @@ class Data2D(Data1D):
         
     def vflip(self):
         self.data = self.data[:, ::-1]
+        
+        
+    @property
+    def dy(self):
+        if self.yaxis is None:
+            raise ValueError("Cannot access property dy because yaxis is None.")
+        
+        return np.mean(np.gradient(self.yaxis))
         
         
         
