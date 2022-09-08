@@ -9,7 +9,7 @@ import numpy as np
 
 import h5py
 import astropy.units as u
-from abc import ABC, abstractmethod
+
 import warnings
 
 from panoptes.util.misc import  _compressed
@@ -20,98 +20,7 @@ from matplotlib.widgets import Cursor
 from IPython import get_ipython
 
 
-
-
-class BaseObject(ABC):
-    """
-    An object with properties that are savable to an HDF5 file or a group
-    within an HDF5 file.
-    
-    The _save and _load methods need to be extended in child classes
-    to define exactly what is being loaded and/or saved.
-    
-    """
-    
-    def __init__(self):
-        # The path to the file
-        self.path = None
-        # The group within the h5 file where this is stored.
-        # Defaults to the root group
-        self.group = '/'
-    
-    
-    def _save(self, grp):
-        """
-        Save this object to an h5 group
-        """
-        
-        # Empty the group before saving new data there
-        for key in grp.keys():
-            del grp[key]
-        
-        grp.attrs['class'] = self.__class__.__name__
-        
-        
-    def _load(self, grp):
-        """
-        Load an object from an h5 group
-        """
-        pass
-    
-    
-    def save(self, path, group=None):
-        """
-        Save this object to an h5 file or group within an h5 file
-        """ 
-        
-        if isinstance(path, h5py.File):
-            self.path = path.filename
-            self.group = path.name
-            self._save(path)
-            
-        elif isinstance(path, h5py.Group):
-            self.path = path.file.filename
-            self.group = path.name
-            self._save(path)
-                
-        else:
-            self.path = path
-            self.group = '/'
-            with h5py.File(self.path, 'a') as f:
-                if group is not None:
-                    grp = f[group]
-                else:
-                    grp = f
-                
-                self._save(grp)
-
-
-    def load(self, path, group='/'):
-        """
-        Load this object from a file
-        """
-        
-        if isinstance(path, (h5py.File, h5py.Group)):
-            self.path = path.filename
-            # Select a subgroup if the group keyword is used
-            path = path[group]
-            self.group = path.name
-            self._load(path)
-            
-        else:
-            self.path = path
-            self.group = group
-        
-            with h5py.File(self.path, 'r') as f:
-                
-                if group is not None:
-                    grp = f[group]
-                else:
-                    grp = f
-                
-                self._load(grp)
-    
-
+from panoptes.util.base import BaseObject
 
 
 class Data(BaseObject):
@@ -165,7 +74,7 @@ class Data1D(Data):
         
         if self.xaxis is not None:
             if isinstance(self.xaxis, u.Quantity):
-                grp['xaxis'] = self.xaxis.to(u.cm).value
+                grp['xaxis'] = self.xaxis.value
                 grp['xaxis'].attrs['unit'] = str(self.xaxis.unit)
             else:
                 grp['xaxis'] = self.xaxis
@@ -173,7 +82,7 @@ class Data1D(Data):
                 grp['xaxis'].attrs['unit'] = ''
             
         if self.data is not None:
-            if isinstance(self.xaxis, u.Quantity):
+            if isinstance(self.data, u.Quantity):
                 grp['data'] = self.data.value
                 grp['data'].attrs['unit'] = str(self.data.unit)
             else:
@@ -272,7 +181,7 @@ class Data2D(Data1D):
         if self.yaxis is not None:
             
             if isinstance(self.yaxis, u.Quantity):
-                grp['yaxis'] = self.yaxis.to(u.cm).value
+                grp['yaxis'] = self.yaxis.value
                 grp['yaxis'].attrs['unit'] = str(self.yaxis.unit)
             else:
                 grp['yaxis'] = self.yaxis

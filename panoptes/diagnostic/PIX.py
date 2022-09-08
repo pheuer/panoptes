@@ -29,16 +29,19 @@ from IPython import get_ipython
 
 
 from panoptes.pinholes import PinholeArray
-from panoptes.tmat.tmat import TransferMatrix
+from panoptes.reconstruction.tmat import TransferMatrix
 from panoptes.reconstruction.gelfgat import gelfgat_poisson, GelfgatResult
 
 
-from panoptes.detector.base import Data2D
+from panoptes.detector.detector import Data2D
+from panoptes.detector.xray import XrayIP
+from panoptes.diagnostic.diagnostic import Diagnostic
+
 
 from panoptes.util.misc import identify_filetype
 
         
-class PIX:
+class PIX(Diagnostic):
     
     def __init__(self, *args, pinhole_array = None):
         """
@@ -46,18 +49,18 @@ class PIX:
         
             Either a shot number or a filepath directly to the data file
         """
+        super().__init__()
         
         # A figure, axis tuple for plotting
         self.figax = None
         
-        
+        self.pinholes = None
         self.data = None
         self.stack = None
         self.tmat = None
         self.reconstruction = None
         
-        
-
+    
         # TODO: Get the shot number at some point using lotus...
         # Maybe when loading the data into XrayIP?
         self.shotnumber = None
@@ -72,20 +75,33 @@ class PIX:
             #TODO: Support lookup by shot number here using lotus
             self.path = args[0]
             
-            filetype = identify_filetype(self.path)
+            # If an hdf4 file is given, require and run the conversion utility
+            # TODO: Use lotus to get an h5 natively so we can skip this conversion
+            # kerfuffle 
+            self.path = ensure_hdf5(self.path)
             
+            filetype = identify_filetype(self.path)
+
             if filetype == self.__class__.__name__:
-                self.load()
+                self.load(self.path)
                 
             elif filetype == 'XrayIP':
                 with h5py.File(self.path, 'r') as f:
                     self._load_data(f)
                     
+            elif filetype == 'OMEGA IP':
+               self.data = XrayIP(self.path)
+               
+                    
+            else:
+                raise ValueError(f"File {self.path} data type {filetype} "
+                                 "is not valid for class "
+                                 f"{self.__class__.__name__}")
+                    
     
         if pinhole_array is not None:
-            self.set_pinholes(pinhole_array)
-        else:
-            self.pinholes = None
+            self.set_pinhole_array(pinhole_array)
+
 
 
 
@@ -97,71 +113,54 @@ class PIX:
             
    
            
-    def save(self, path):
-        """
-        See docstring for "save"
-        """ 
-        self.path = path
+    def _save(self, grp):
+        super()._save(grp)
         
-        with h5py.File(path, 'a') as grp:
-            
-            # Empty the group
-            for key in grp.keys():
-                del grp[key]
-            
-            if self.pinholes is not None:
-                # Write pinhole object
-                pinholes_grp = grp.create_group('pinholes')
-                self.pinholes.save(pinholes_grp)
-            
-            if self.data is not None:
-                data_grp = grp.create_group('data')
-                self.data.save(data_grp)
-                
-            if self.stack is not None:
-                stack_grp = grp.create_group('stack')
-                self.stack.save(stack_grp)
-                
-            if self.tmat is not None:
-                tmat_grp = grp.create_group('tmat')
-                self.tmat.save(tmat_grp)
-                
-                
-            if self.reconstruction is not None:
-               recon_grp = grp.create_group('reconstruction')
-               self.reconstruction.save(recon_grp)
-                
-                
-                
-            
-    def load(self, path):
-        self.path = path
+        if self.pinholes is not None:
+            # Write pinhole object
+            pinholes_grp = grp.create_group('pinholes')
+            self.pinholes.save(pinholes_grp)
         
-        with h5py.File(path, 'r') as f:
+        if self.data is not None:
+            data_grp = grp.create_group('data')
+            self.data.save(data_grp)
             
-            if 'pinholes' in f.keys():
-                self.pinholes = PinholeArray()
-                self.pinholes.load(f['pinholes'])
-                
-            if 'data' in f.keys():
-                self.data = f['data']['data'][...]
-                self.xaxis = f['data']['xaxis'][...] * u.cm
-                self.yaxis = f['data']['yaxis'][...]* u.cm
-                
-            if 'stack' in f.keys():
-                self.stack = f['stack']['data'][...]
-                self.stack_x = f['stack']['xaxis'][...]* u.cm
-                self.stack_y = f['stack']['yaxis'][...]* u.cm
-                
-            if 'tmat' in f.keys():
-                self.tmat = TransferMatrix(f['tmat'])
-                
-            if 'reconstruction' in f.keys():
-                self.reconstruction = GelfgatResult(f['reconstruction'])
+        if self.stack is not None:
+            stack_grp = grp.create_group('stack')
+            self.stack.save(stack_grp)
             
+        if self.tmat is not None:
+            tmat_grp = grp.create_group('tmat')
+            self.tmat.save(tmat_grp)
+            
+        if self.reconstruction is not None:
+           recon_grp = grp.create_group('reconstruction')
+           self.reconstruction.save(recon_grp)
+                
+                
+                
+            
+    def _load(self, grp):
+        super()._load(grp)
         
+        if 'pinholes' in grp.keys():
+            self.pinholes = PinholeArray()
+            self.pinholes._load(grp['pinholes'])
+
         
-        
+        if 'data' in grp.keys():
+            self.data = Data2D(grp['data'])
+
+            
+        if 'stack' in grp.keys():
+            self.stack = Data2D(grp['stack'])
+            
+        if 'tmat' in grp.keys():
+            self.tmat = TransferMatrix(grp['tmat'])
+            
+        if 'reconstruction' in grp.keys():
+            self.reconstruction = GelfgatResult(grp['reconstruction'])
+
         
         
 
@@ -171,22 +170,18 @@ class PIX:
         
         
     def fit_pinholes(self, *args, **kwargs):
-        self.pinholes.fit(self.xaxis.to(u.cm).value,
-                          self.yaxis.to(u.cm).value,
-                          self.data,
+        self.pinholes.fit(self.data.xaxis.to(u.cm).value,
+                          self.data.yaxis.to(u.cm).value,
+                          self.data.data,
                           *args, **kwargs)
         
         
     def stack_pinholes(self):
-        
-       sx, sy, stack =  self.pinholes.stack(self.xaxis.to(u.cm).value,
-                                            self.yaxis.to(u.cm).value, 
-                                            self.data)
+       sx, sy, stack =  self.pinholes.stack(self.data.xaxis.to(u.cm).value,
+                                            self.data.yaxis.to(u.cm).value, 
+                                            self.data.data)
        
-       self.stack_x = sx * u.cm
-       self.stack_y = sy * u.cm
-       self.stack = stack
-       
+       self.stack = Data2D(sx*u.cm, sy*u.cm, stack)
        self.plot_stack()
        
        
@@ -194,23 +189,11 @@ class PIX:
         
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
-        ax.pcolormesh(self.stack_x.to(u.cm).value, 
-                      self.stack_y.to(u.cm).value, self.stack.T)
+        ax.pcolormesh(self.stack.xaxis.to(u.cm).value, 
+                      self.stack.yaxis.to(u.cm).value, self.stack.data.T)
         
-        
-    def hreflect(self):
-        self.data = self.data[::-1, :]
-        self.plot()
-        
-    def vreflect(self):
-        self.data = self.data[:, ::-1]
-        self.plot()
         
 
-    
-    
-    
-    
     def plot(self, *args):
         """
         Makes a plot of the x-ray data
@@ -329,42 +312,54 @@ class PIX:
 if __name__ == '__main__':
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
-    h4toh5convert_path = os.path.join('C:\\','Program Files','HDF_Group','H4H5','2.2.5','bin', 'h4toh5convert.exe')
     
     data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
-    h4toh5convert_path = os.path.join('C:\\','Program Files','HDF_Group','H4H5','2.2.5','bin', 'h4toh5convert.exe')
     
     
-    save_path = os.path.join(data_dir, '103955', 'result.h5')
+    data_path = os.path.join(data_dir, '103955', 'pcis_s103955_pcis1_-1-[phosphor].hdf' )
+    save_path = os.path.join(data_dir, '103955', 'result4.h5')
     tmat_path = os.path.join(data_dir, '103955', 'tmat3.h5')
     
 
         
        
-    obj = XrayIP()
+    
+    
+    
     
     if os.path.isfile(save_path):
         print("Loading file")
-        obj.load(save_path)
+        obj = PIX(save_path)
     else:
-        obj.set_pinhole_array('D-PF-C-055_A')
-        obj.load_data(103955, data_dir=data_dir, h4toh5convert_path=h4toh5convert_path,)
+        obj = PIX(data_path, pinhole_array = 'D-PF-C-055_A')
+        
+        obj.data.set_subregion( np.array([(0.47, 9.3), (5, 0.73)])*u.cm)
+        
+        
+        obj.plot()
+        obj.save(save_path)
+        obj.save(save_path)
     
-        obj.set_subregion( np.array([(0.47, 9.3), (5, 0.73)])*u.cm)
     
         obj.fit_pinholes(rough_adjust={'dx':-0.2, 'dy':-0.3, 'mag_s':35.5, 'rot':-17},
                          auto_select_apertures=True,)
         
         obj.save(save_path)
         
+      
+    
+    
+    
     if obj.stack is None:
         obj.stack_pinholes()
         obj.save(save_path)
         
-        
+    
     if not os.path.isfile(tmat_path):
         obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm)
+       
         
+    """
     if obj.reconstruction is None:
         obj.reconstruct(save_path, tmat_path)
         obj.save(save_path)
@@ -375,7 +370,7 @@ if __name__ == '__main__':
     obj = XrayIP(save_path)
     obj.reconstruction.iter_plot()
     obj.plot_reconstruction()
-    
+    """
     
     
     

@@ -33,6 +33,7 @@ from IPython import get_ipython
 
 
 from panoptes.util.misc import _compressed
+from panoptes.util.base import BaseObject
 
 
 def _penumbra_model(axes, data, radius, amp, xc,yc, mag_r,sigma,background):
@@ -100,7 +101,7 @@ def _adjust_xy(xy, dx, dy, rot, mag_s, skew, skew_angle, hreflect, vreflect):
         return xy
 
 
-class PinholeArray:
+class PinholeArray(BaseObject):
     
     def __init__(self, *args, pinhole_name=None, plots=False):
         """
@@ -120,6 +121,9 @@ class PinholeArray:
         the pinhole or radiography magnification. 
      
         """
+        
+        super().__init__()
+        
         # Make plots appear in new windows
         # If statement guards against running outside of ipython
         # TODO: support plots outside of iPython...
@@ -148,16 +152,7 @@ class PinholeArray:
         else:
             raise ValueError(f"Invalid number of arguments: {len(args)}")
             
-        
-        
- 
-        
-       
-        
-        
 
-        
-            
         
     # *************************************************************************
     # Basic methods
@@ -230,31 +225,13 @@ class PinholeArray:
     # *************************************************************************
     # Methods for loading and saving 
     # *************************************************************************
-            
-    def save(self, grp):
-        """
-        Save the data about this subset into an h5 group
-          
-        grp : h5py.Group or path string
-            The location to save the h5 data. This could be the root group
-            of its own h5 file, or a group within a larger h5 file.
-              
-            If a string is provided instead of a group, try to open it as
-            an h5 file and create the group there
-          
-        """
-        if isinstance(grp, str):
-            with h5py.File(grp, 'w') as f:
-                self._save(f)
-        else:
-            self._save(grp)
-        
-          
+
                 
     def _save(self, grp):
         """
         See docstring for "save"
         """
+        super()._save(grp)
     
         # Write pinhole information
         info_grp = grp.create_group('pinhole_info')
@@ -272,34 +249,21 @@ class PinholeArray:
             adjustment_grp[key] = val
             
         grp['xy'] = self.xy
+        grp['xy'].attrs['unit'] = 'cm'
         grp['use_for_fit'] = self.use_for_fit
         grp['use_for_stack'] = self.use_for_stack
         grp['pinhole_centers'] = self.pinhole_centers
-        
+        grp['pinhole_centers'].attrs['unit'] = 'cm'
         
         if self.mag_r is not None: 
             grp['mag_r'] = float(self.mag_r)
 
-    def load(self, grp):
-           """
-           Load a PinholeArray object from a file or hdf5 group
-           
-           grp : h5py.Group 
-               The location from which to load the h5 data. This could be the 
-               root group of its own h5 file, or a group within a larger h5 file.
-           
-           """
-           if isinstance(grp, str):
-               with h5py.File(grp, 'r') as f:
-                   self._load(f)
-           else:
-               self._load(grp)
-                
-                        
+          
     def _load(self, grp):
         """
         See documentation for 'load'
         """
+        super()._load(grp)
         
         # Load pinhole information
         info_grp = grp['pinhole_info']
@@ -326,10 +290,6 @@ class PinholeArray:
         else:
             self.mag_r = None
             
-        self._init_pinhole_variables()
-        
-
-        
 
     
     @property
@@ -933,16 +893,21 @@ class PinholeArray:
                                                      variable='stack',
                                                      border=border)
             
+            
+        print(self.mag_r)
+        print(self.diameter)
         
         if width is None:
             width = 1.5*(self.mag_r*self.diameter)
+            
+        
             
         # Calculate the half-width in pixels
         dx = np.mean(np.gradient(xaxis))
         dy = np.mean(np.gradient(yaxis))
         wx = int(width/2/dx)
         wy = int(width/2/dy)
-        
+    
         # Indices of the apetures to include
         use_ind = [i for i,v in enumerate(self.use_for_stack) if v==1]
         
@@ -974,6 +939,8 @@ class PinholeArray:
         for i, ind in enumerate(use_ind):
             x0 = np.argmin(np.abs(xaxis - (self.pinhole_centers[i,0])))
             y0 = np.argmin(np.abs(yaxis - (self.pinhole_centers[i,1])))
+            
+            print(self.pinhole_centers[i,:])
             
             data_subset = data[x0-wx:x0+wx, y0-wy:y0+wy]
 

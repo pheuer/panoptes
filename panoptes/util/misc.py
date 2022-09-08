@@ -34,7 +34,7 @@ def identify_filetype(path):
         
 def identify_hdf_grp(grp):
     if 'class' in grp.attrs.keys():
-        return str(grp.attrs['class'][...])
+        return str(grp.attrs['class'])
     
     if 'PSL_per_px' in grp.keys():
         return 'OMEGA IP'

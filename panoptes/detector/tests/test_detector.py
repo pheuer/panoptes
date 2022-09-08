@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 import astropy.units as u
 
-from panoptes.detector.base import Data2D
+from panoptes.detector.detector import Data2D
 
 
 

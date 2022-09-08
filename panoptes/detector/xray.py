@@ -74,7 +74,6 @@ class XrayIP(XrayDetector2D):
             dx = float(f['PSL_per_px'].attrs['pixelSizeX'][...]) * u.um
             dy = float(f['PSL_per_px'].attrs['pixelSizeY'][...]) * u.um
             
-
         # Arrays of the actual positions for each axis
         xaxis = np.arange(data.shape[0])*dx
         yaxis = np.arange(data.shape[1])*dy
