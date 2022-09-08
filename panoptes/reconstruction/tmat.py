@@ -8,13 +8,13 @@ import numpy as np
 from multiprocessing import Pool
 import tqdm
     
-from panoptes.util.misc import timestamp
-from panoptes.util.misc import  find_file
+from panoptes.util.base import BaseObject
 
 from cached_property import cached_property
 
 
-class TransferMatrix (h5py.File): 
+
+class TransferMatrix(BaseObject): 
 
     def __init__(self, *args):
         """
@@ -95,6 +95,7 @@ class TransferMatrix (h5py.File):
             
         
         """
+        super().__init__()
         
         # Constants
         # xo,yo,xi,yi are stored as private attributes because their public
@@ -117,8 +118,9 @@ class TransferMatrix (h5py.File):
         self.path = None
         
         
-        
-        if len(args) == 1:
+        if len(args)==0:
+            pass
+        elif len(args) == 1:
             self.path = args[0]
             self.load(self.path)
         
@@ -171,71 +173,8 @@ class TransferMatrix (h5py.File):
             result = f['tmat'][...]   
         return result
     
-    
-    
-    def save(self, *args):
-        """
-        Save the data into an h5 group
-          
-        grp : h5py.Group or path string
-            The location to save the h5 data. This could be the root group
-            of its own h5 file, or a group within a larger h5 file.
-              
-            If a string is provided instead of a group, try to open it as
-            an h5 file and create the group there
-          
-        """
-        print(args)
-        
-        if len(args) == 0:
-            if self.path is None:
-                raise ValueError("Set path to a file save.")
-            else:
-                grp = self.path
-                
-        if len(args) == 1:
-        
-            grp = args[0]
-            # If path, save to path
-            if isinstance(args[0], str):
-                self.path = args[0]
-            # If group, save the filename to path
-            elif isinstance(grp, h5py.Group):
-                self.path = None
-            else:
-                raise ValueError(f"Invalid group: {grp}")
-            
-        else:
-            raise ValueError(f"Invalid number of arguments {len(args)}")
-                
-        
-        
-        if isinstance(self.path, str):
-            with h5py.File(grp, 'a') as f:
-                self._save(f)
-        else:
-            self._save(grp)
-     
-            
-    def load(self, grp):
-           """
-           Load object from a file or hdf5 group
-           
-           grp : h5py.Group 
-               The location from which to load the h5 data. This could be the 
-               root group of its own h5 file, or a group within a larger h5 file.
-           
-           """
-           self.path = grp
-           
-           if isinstance(grp, str):
-               with h5py.File(grp, 'r') as f:
-                   self._load(f)
-           else:
-               self._load(grp)
 
-
-    def _save(self, f):
+    def _save(self, grp):
         """
         Saves the transfer matrix constants (but not the tmat itself) to
         an h5 file. If the path for the file is not already set, it must be
@@ -245,41 +184,44 @@ class TransferMatrix (h5py.File):
         calculate_tmat method.
 
         """
+        super()._save(grp)
 
         if self.xo is not None:
-            f['xo'] = self.xo
-            f['yo'] = self.yo
-            f['xi'] = self.xi
-            f['yi'] = self.yi
-            f['mag'] = self.mag
-            f['ap_xy'] = self.ap_xy
-            f['psf'] = self.psf
-            f['psf_ax'] = self.psf_ax
+            grp['xo'] = self.xo
+            grp['yo'] = self.yo
+            grp['xi'] = self.xi
+            grp['yi'] = self.yi
+            grp['mag'] = self.mag
+            grp['ap_xy'] = self.ap_xy
+            grp['psf'] = self.psf
+            grp['psf_ax'] = self.psf_ax
         
             
         if self.R_ap is not None:
-            f['R_ap'] = self.R_ap.to(u.cm).value
-            f['R_ap'].attrs['unit'] = 'cm'
-            f['L_det'] = self.L_det.to(u.cm).value
-            f['L_det'].attrs['unit'] = 'cm'
+            grp['R_ap'] = self.R_ap.to(u.cm).value
+            grp['R_ap'].attrs['unit'] = 'cm'
+            grp['L_det'] = self.L_det.to(u.cm).value
+            grp['L_det'].attrs['unit'] = 'cm'
 
         
             
-    def _load(self, f):
+    def _load(self, grp):
         
-        if 'xo' in f.keys():
-            self.xo = f['xo'][...]
-            self.yo = f['yo'][...]
-            self.xi = f['xi'][...]
-            self.yi = f['yi'][...]
-            self.mag = f['mag'][...]
-            self.ap_xy = f['ap_xy'][...]  
-            self.psf = f['psf'][...]
-            self.psf_ax = f['psf_ax'][...]        
+        super()._load(grp)
+        
+        if 'xo' in grp.keys():
+            self.xo = grp['xo'][...]
+            self.yo = grp['yo'][...]
+            self.xi = grp['xi'][...]
+            self.yi = grp['yi'][...]
+            self.mag = grp['mag'][...]
+            self.ap_xy = grp['ap_xy'][...]  
+            self.psf = grp['psf'][...]
+            self.psf_ax = grp['psf_ax'][...]        
             
-        if 'R_ap' in f.keys():
-            self.R_ap = f['R_ap'][...] * u.cm
-            self.L_det = f['L_det'][...] * u.cm
+        if 'R_ap' in grp.keys():
+            self.R_ap = grp['R_ap'][...] * u.cm
+            self.L_det = grp['L_det'][...] * u.cm
 
 
     def set_constants(self, xo, yo, xi, yi, mag, ap_xy, 
@@ -288,28 +230,38 @@ class TransferMatrix (h5py.File):
         Set the constants that define the transfer matrix. 
         """
         error_list = []
-        for x in [('xo',xo), ('yo',yo), ('xi', xi), ('yi',yi),
-                   ('mag',mag), ('ap_xy',ap_xy), ('psf',psf),
-                   ('psf_ax',psf_ax)]:
+        attrs = {'xo':xo, 'yo':yo, 'xi':xi, 'yi':yi,
+                   'mag':mag, 'ap_xy':ap_xy, 'psf':psf,
+                   'psf_ax':psf_ax}
+        for key, val in attrs.items() :
             
+            
+            # If a u.Quantity is given, try to convert it to a 
+            # dimensionless np.ndarray
+            if isinstance(val, u.Quantity):
+                try:
+                    attrs[key] = val.to(u.dimensionless_unscaled).value
+                except u.UnitConversionError:
+                    error_list.append(f"{key} (units: {val.unit})")
 
-            if not type(x[1]) in [np.ndarray, int, float]:
-                error_list.append(f"{x[0]} ({type(x[1])})")
+
+            elif not isinstance(val, (np.ndarray, float, int)):
+                error_list.append(f"{key} ({type(val)})")
                 
+            
+                    
         if len(error_list) > 0:
             raise ValueError("All constant arguments must be dimensionless "
+                             "u.Quantity arrays,"
                              "np.ndarrays, floats, or ints, "
                              "but the folllowing are not: "
                              f"{error_list}")
+            
+        else:
+            
+            for key, val in attrs.items():
+                setattr(self, key, val)
     
-        self.xo = xo
-        self.yo = yo
-        self.xi = xi
-        self.yi = yi
-        self.mag = mag
-        self.ap_xy = ap_xy
-        self.psf = psf
-        self.psf_ax = psf_ax
 
     
     def set_dimensions(self, R_ap, L_det):
@@ -380,24 +332,16 @@ class TransferMatrix (h5py.File):
     
     
 
-    def calculate_tmat(self, path=None):
+    def calculate_tmat(self):
         """
         Calculates the transfer matrix and stores it to the path
     
         """
         
-        if path is not None:
-            self.path = path
-        else:
-            if self.path is None:
-                raise ValueError("File path must be set in order to calculate "
-                                 "a transfer matrix, since the transfer matrix "
-                                 "will be saved directly to disk.")
-                
-                
-                
+        print(self.path)
+        
         # Start by saving the paramters of the tmat
-        self.save(path)
+        self.save(self.path)
 
     
         # Create 2D arrays
@@ -534,12 +478,12 @@ if __name__ == '__main__':
     psf_ax = np.linspace(0, 2*R_ap, num=100) / R_ap
     
     
-    t = TransferMatrix(save_path)
+    t = TransferMatrix()
     
     
     t.set_constants(xo, yo, xi, yi, mag, ap_xy, psf=psf, psf_ax=psf_ax)
     
-    t.save()
+    t.save(save_path)
 
     
     print("Calculating tmat")
