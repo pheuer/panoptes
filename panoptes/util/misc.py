@@ -1,5 +1,45 @@
 import os
 import datetime
+import h5py
+
+
+def identify_filetype(path):
+    """
+    Try to identify what type of file a file or a group within an hdf5 file 
+    is based on  its contents and/or extension.
+    
+    All of the objects in this package save a 'class' attribute to the root
+    directory of their group
+    """
+    
+    # If the provided path is actually within an HDF5 file, identify the
+    # type of the group instead of the file.
+    if isinstance(path, h5py.Group):
+        return identify_hdf_grp(path)
+    
+
+    _, ext = os.path.splitext(path)
+
+    if ext.lower() in ['.h5', '.hdf5']:
+        with h5py.File(path, 'r') as f:
+            return identify_hdf_grp(f)
+        
+    elif ext.lower() in ['.cpsa']:
+        return 'cr39'
+    
+    else:
+        raise ValueError(f"Unrecognized file extension: {ext}")
+    
+
+        
+def identify_hdf_grp(grp):
+    if 'class' in grp.attrs.keys():
+        return str(grp.attrs['class'][...])
+    
+    if 'PSL_per_px' in grp.keys():
+        return 'OMEGA IP'
+        
+
 
 def timestamp():
     """
