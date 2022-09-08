@@ -36,14 +36,9 @@ class XrayDetector2D(Data2D):
         self.super().__init__(*args)
         
         
-        
-    
-
-
-        
 class XrayIP(XrayDetector2D):
     
-    def __init__(self, filepath, h4toh5convert_path=None):
+    def __init__(self, filepath):
         
         # Frst initialize the empty parent class
         self.super().__init__()
@@ -51,17 +46,10 @@ class XrayIP(XrayDetector2D):
         self.path = filepath
         
         # If an hdf4 file is given, require and run the conversion utility
-        name, ext = os.path.splitext(self.path)
-        if ext == '.hdf':
-            if h4toh5convert_path is None:
-                raise ValueError("Unfortunately you have and hdf4 file: you will "
-                                 "need to provide the path to the h4toh5convert "
-                                 "exe to convert it.")
-                
-            # TODO: Use lotus to get an h5 natively so we can skip this conversion
-            # kerfuffle 
-            self.path = ensure_hdf5(self.path, h4toh5convert_path=h4toh5convert_path)
-            
+        # TODO: Use lotus to get an h5 natively so we can skip this conversion
+        # kerfuffle 
+        self.path = ensure_hdf5(self.path)
+        
             
         # Check if the file is Data object or some other data file based
         # on the keywords within it
