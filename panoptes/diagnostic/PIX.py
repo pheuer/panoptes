@@ -17,27 +17,17 @@ import os, h5py
 
 import astropy.units as u
 
-from panoptes.util.misc import  find_file, _compressed
 from panoptes.util.hdf import ensure_hdf5
 
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Cursor
-
-# Make plots appear in new windows
-from IPython import get_ipython
-
 
 
 from panoptes.pinholes import PinholeArray
 from panoptes.reconstruction.tmat import TransferMatrix
 from panoptes.reconstruction.gelfgat import gelfgat_poisson, GelfgatResult
-
-
 from panoptes.detector.detector import Data2D
 from panoptes.detector.xray import XrayIP
 from panoptes.diagnostic.diagnostic import Diagnostic
-
-
 from panoptes.util.misc import identify_filetype
 
         
@@ -216,7 +206,7 @@ class PIX(Diagnostic):
     
     
     
-    def make_tmat(self, tmat_path, xyo=None, R_ap=None, L_det=350*u.cm):
+    def make_tmat(self, tmat_path, xyo=None, R_ap=None, L_det=350*u.cm, oshape=(101, 101)):
         
             
         if self.stack is None:
@@ -228,7 +218,6 @@ class PIX(Diagnostic):
             
         if xyo is None:
             xlim = 80
-            oshape = (31,31)
             xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
             yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
         else:
@@ -243,8 +232,8 @@ class PIX(Diagnostic):
         psf = np.concatenate((np.ones(50), np.zeros(50)))
         psf_ax = np.linspace(0, 2*R_ap, num=100)/R_ap
         
-        xi = self.stack_x/ R_ap /mag
-        yi = self.stack_y/ R_ap / mag
+        xi = self.stack.xaxis/ R_ap /mag
+        yi = self.stack.yaxis/ R_ap / mag
         
         
         c = 4
@@ -280,7 +269,7 @@ class PIX(Diagnostic):
         print("Do reconstruction")
         
         c=4
-        data = self.stack[::c, ::c] 
+        data = self.stack.data[::c, ::c] 
         
         self.reconstruction = gelfgat_poisson(data.flatten(), tmat, 50, h_friction=3)
         
@@ -317,7 +306,7 @@ if __name__ == '__main__':
     
     
     data_path = os.path.join(data_dir, '103955', 'pcis_s103955_pcis1_-1-[phosphor].hdf' )
-    save_path = os.path.join(data_dir, '103955', 'result4.h5')
+    save_path = os.path.join(data_dir, '103955', 'result5.h5')
     tmat_path = os.path.join(data_dir, '103955', 'tmat3.h5')
     
 
@@ -354,23 +343,21 @@ if __name__ == '__main__':
         obj.stack_pinholes()
         obj.save(save_path)
         
+        
     
     if not os.path.isfile(tmat_path):
-        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm)
+        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(31, 31))
        
         
-    """
+    
     if obj.reconstruction is None:
         obj.reconstruct(save_path, tmat_path)
         obj.save(save_path)
         
         
-        
-        
-    obj = XrayIP(save_path)
+
     obj.reconstruction.iter_plot()
     obj.plot_reconstruction()
-    """
     
     
     

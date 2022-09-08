@@ -332,14 +332,15 @@ class TransferMatrix(BaseObject):
     
     
 
-    def calculate_tmat(self):
+    def calculate_tmat(self, path=None):
         """
         Calculates the transfer matrix and stores it to the path
     
         """
         
-        print(self.path)
-        
+        if path is not None:
+            self.path = path
+    
         # Start by saving the paramters of the tmat
         self.save(self.path)
 
