@@ -64,9 +64,13 @@ class BaseObject(ABC):
         Save this object to an h5 file or group within an h5 file
         """ 
         
-        if isinstance(path, (h5py.File, h5py.Group)):
-            # Store the path 
+        if isinstance(path, h5py.File):
             self.path = path.filename
+            self.group = path.name
+            self._save(path)
+            
+        elif isinstance(path, h5py.Group):
+            self.path = path.file.filename
             self.group = path.name
             self._save(path)
                 

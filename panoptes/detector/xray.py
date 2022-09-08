@@ -10,21 +10,10 @@ import os, h5py
 
 import astropy.units as u
 
-from panoptes.util.misc import  find_file, _compressed
 from panoptes.util.hdf import ensure_hdf5
 
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Cursor
 
-# Make plots appear in new windows
-from IPython import get_ipython
-
-
-
-from panoptes.pinholes import PinholeArray
-from panoptes.tmat.tmat import TransferMatrix
-from panoptes.reconstruction.gelfgat import gelfgat_poisson, GelfgatResult
-from panoptes.detector.base import Data2D
+from panoptes.detector.detector import Data2D
 
 from panoptes.util.misc import identify_filetype
 
@@ -33,7 +22,7 @@ from panoptes.util.misc import identify_filetype
 
 class XrayDetector2D(Data2D):
     def __init__(self, *args):
-        self.super().__init__(*args)
+        super().__init__(*args)
         
         
 class XrayIP(XrayDetector2D):
@@ -41,7 +30,7 @@ class XrayIP(XrayDetector2D):
     def __init__(self, filepath):
         
         # Frst initialize the empty parent class
-        self.super().__init__()
+        super().__init__()
         
         self.path = filepath
         
@@ -61,7 +50,7 @@ class XrayIP(XrayDetector2D):
             
         elif filetype == 'OMEGA IP':
             xaxis, yaxis, data = self._read_data()
-            self.super().__init__(xaxis, yaxis, data)
+            super().__init__(xaxis, yaxis, data)
             
         else:
             raise ValueError(f"File type {filetype} is not supported by "
@@ -87,8 +76,8 @@ class XrayIP(XrayDetector2D):
             
 
         # Arrays of the actual positions for each axis
-        xaxis = np.arange(self.data.shape[0])*dx
-        yaxis = np.arange(self.data.shape[1])*dy
+        xaxis = np.arange(data.shape[0])*dx
+        yaxis = np.arange(data.shape[1])*dy
         
         return xaxis, yaxis, data
 
