@@ -3,19 +3,21 @@
 @author: Peter Heuer
 
 Object representing a CR39 dataset
+
+This is a thin wrapper on the 'CR39' class from cr39py
 """
 import os
 import numpy as np
 import astropy.units as u
 
-from panoptes.detector.detector import Data2D
+from panoptes.util.base import BaseObject
 
 from panoptes.util.misc import identify_filetype
 
 from cr39py.cr39 import CR39 as _CR39
 from cr39py.cr39 import Cut
 
-class CR39(Data2D):
+class CR39(BaseObject):
     
     def __init__(self, filepath, *args, **kwargs):
         """
@@ -39,8 +41,8 @@ class CR39(Data2D):
             self.load(self.path)
             
         elif filetype == 'cr39':
-            xaxis, yaxis, data = self.read_data(*args, **kwargs)
-            super().__init__(xaxis, yaxis, data)
+           self.read_data(*args, **kwargs)
+
             
         else:
             raise ValueError(f"File type {filetype} is not supported by "
@@ -49,16 +51,10 @@ class CR39(Data2D):
     def _save(self, grp):
         
         super()._save(grp)
-        
         if self.cr39 is not None:
             self.cr39.save(grp)
             
-            
-        # Save a histogram for each subcut created
-        
-        
-            
-            
+
     def _load(self, grp):
         super()._load(grp)
         
@@ -69,17 +65,11 @@ class CR39(Data2D):
         """
         Reads data from a cpsa file
         """
-        
         self.cr39 = _CR39(self.path, verbose=True)
         
         if cli:
             self.cr39.cli()
-            
-        
-        xaxis, yaxis, data = self.cr39.frames()
 
-        return xaxis * u.cm, yaxis*u.cm, data
-        
   
         
   
@@ -91,7 +81,9 @@ if __name__ == "__main__":
     #data_path = os.path.join(data_dir, '103955', 'OM220830_105521_PR2771.cpsa' )
     save_path = os.path.join(data_dir, '103955', 'cr39_test.h5' )
     
-    obj = CR39(data_path)
+    #obj = CR39(data_path)
+    
+    obj = CR39(save_path)
     obj.cr39.add_cut(Cut(cmin=30))
     print(obj.cr39.current_subset)
     obj.cr39.add_subset()
@@ -100,8 +92,8 @@ if __name__ == "__main__":
     print(obj.cr39.current_subset)
     
     
-    obj.save(save_path)
-    obj = CR39(save_path)
+    
+    #obj = CR39(save_path)
     
         
         
