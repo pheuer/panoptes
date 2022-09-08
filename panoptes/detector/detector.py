@@ -37,6 +37,42 @@ class Data(BaseObject):
                 self.data = args[0]
             else:
                 self.load(args[0])
+                
+    def _save(self, grp):
+        
+        # Call the parent class
+        # in this case, this just saves the class name to the class 
+        # attribute of the group
+        super()._save(grp)
+         
+        if self.data is not None:
+            if isinstance(self.data, u.Quantity):
+                grp['data'] = self.data.value
+                grp['data'].attrs['unit'] = str(self.data.unit)
+            else:
+                grp['data'] = self.data
+                # u.Unit('') = u.dimensionless_unscaled
+                grp['data'].attrs['unit'] = ''
+                
+                
+    def _load(self, grp):
+         
+         # Call the parent class method
+         # currently does nothing
+         super()._load(grp)
+        
+         if 'data' in grp.keys():
+             try:
+                 unit_str = grp['data'].attrs['unit']
+                 data_unit = u.Unit(unit_str)
+             except ValueError:
+                 warnings.warn(f"Data unit {unit_str} is not a valid astropy unit. "
+                               "Assuming data is dimensionless.")
+                 data_unit = u.dimensionless_unscaled
+                 
+             self.data = grp['data'][...]  * data_unit
+         else:
+             self.data = None
             
             
         
@@ -81,15 +117,6 @@ class Data1D(Data):
                 # u.Unit('') = u.dimensionless_unscaled
                 grp['xaxis'].attrs['unit'] = ''
             
-        if self.data is not None:
-            if isinstance(self.data, u.Quantity):
-                grp['data'] = self.data.value
-                grp['data'].attrs['unit'] = str(self.data.unit)
-            else:
-                grp['data'] = self.data
-                # u.Unit('') = u.dimensionless_unscaled
-                grp['data'].attrs['unit'] = ''
-                
             
             
     def _load(self, grp):
@@ -110,19 +137,7 @@ class Data1D(Data):
             self.xaxis = grp['xaxis'][...] * x_unit
         else:
             self.xaxis = None
-            
-        if 'data' in grp.keys():
-            try:
-                unit_str = grp['data'].attrs['unit']
-                data_unit = u.Unit(unit_str)
-            except ValueError:
-                warnings.warn("Data unit {unit_str} is not a valid astropy unit. "
-                              "Assuming data is dimensionless.")
-                data_unit = u.dimensionless_unscaled
-                
-            self.data = grp['data'][...]  * data_unit
-        else:
-            self.data = None
+        
             
             
     def flip(self):
