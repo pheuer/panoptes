@@ -4,6 +4,7 @@ Created on Thu Sep  8 12:46:48 2022
 
 @author: pheu
 """
+import os
 
 h4toh5convert_path = None
 

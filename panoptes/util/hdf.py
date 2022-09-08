@@ -21,6 +21,8 @@ INSTRUCTIONS
 import os, subprocess, re
 import warnings
 
+from panoptes.config import h4toh5convert_path
+
 def get_hdf5(directory, regex='(.*?)'):
     """
     ind an hdf file in a given directory that matches a regex. If the file
@@ -63,7 +65,7 @@ def get_hdf5(directory, regex='(.*?)'):
     else: 
         raise ValueError("No h4 or h5 files found.")
 
-def ensure_hdf5(file, h4toh5convert_path):
+def ensure_hdf5(file):
     """
     Convert a provided file to hdf5 if necessary. 
     
@@ -72,6 +74,7 @@ def ensure_hdf5(file, h4toh5convert_path):
     If the provided file path is an hdf4 file, use h4toh5convert to convert
     the file and then return the path to the converted file.
     """
+    
     
     hdf5 = ['.hdf5', '.h5']
     
@@ -89,12 +92,11 @@ def ensure_hdf5(file, h4toh5convert_path):
         return path
     
     if h4toh5convert_path is None:
-        raise ValueError("Must set h4toh5convert_path in computers file.")
+        raise ValueError("Must set h4toh5convert_path in the config.py file")
     
-    # TODO: Support running on linux or OSX?
+    # TODO: Support running on linux or OSX...
     # Quotes necessary in case of spaces etc. in path
     cmd = f"\"{h4toh5convert_path}\" \"{src}\" \"{path}\""
-    
 
     # Convert the file to h5
     # cwd needs to be set if the path to this module is on a UNC path, because those
