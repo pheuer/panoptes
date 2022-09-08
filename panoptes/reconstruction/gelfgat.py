@@ -7,6 +7,7 @@ from scipy.stats import chi2
 
 import matplotlib.pyplot as plt
 
+from panoptes.util.base import BaseObject
 
 from cached_property import cached_property
 
@@ -95,7 +96,7 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
     background = B[:, -1]
     B = B[:, :-1]
    
-    # Reshape B, initial_guess to be 2D in the object plane
+    # Reshape B to be 2D in the object plane
     B  = np.reshape(B.T, (*tmat.oshape, niter+1))
 
     
@@ -106,7 +107,7 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
 
 
 
-class GelfgatResult:
+class GelfgatResult(BaseObject):
     
     def __init__(self, *args):
         """
@@ -154,78 +155,48 @@ class GelfgatResult:
         if len(args) == 1:
             self.load(args[0])
             
-        elif len(args) == 5:
+        elif len(args) == 4:
             (self.B, self.logL, self.chisq, 
-             self.background, self.initial_guess) = args
+             self.background) = args
             
         else:
             raise ValueError(f"Invalid number of arguments: {len(args)}")
             
         
             
-    def save(self, grp):
-        """
-        Save the data into an h5 group
-          
-        grp : h5py.Group or path string
-            The location to save the h5 data. This could be the root group
-            of its own h5 file, or a group within a larger h5 file.
-              
-            If a string is provided instead of a group, try to open it as
-            an h5 file and create the group there
-          
-        """
-        if isinstance(grp, str):
-            with h5py.File(grp, 'a') as f:
-                self._save(f)
-        else:
-            self._save(grp)
-               
-    def load(self, grp):
-           """
-           Load object from a file or hdf5 group
-           
-           grp : h5py.Group 
-               The location from which to load the h5 data. This could be the 
-               root group of its own h5 file, or a group within a larger h5 file.
-           
-           """
-           if isinstance(grp, str):
-               with h5py.File(grp, 'r') as f:
-                   self._load(f)
-           else:
-               self._load(grp)
-            
 
-    def _save(self, f):
+
+    def _save(self, grp):
         """
         Saves the reconstruction object to an h5 file.
 
         """
-        f['B'] = self.B
-        f['logL'] = self.logL
-        f['chisq'] = self.chisq
-        f['background'] = self.background
+        super()._save(grp)
+        
+        grp['B'] = self.B
+        grp['logL'] = self.logL
+        grp['chisq'] = self.chisq
+        grp['background'] = self.background
 
-        f['DOF'] = self.DOF
-        f['DOF'].attrs['algorithm'] = self.DOF_algorithm
-        f['termination_condition'] = self.termination_condition
-        f['termination_condition'].attrs['algorithm'] = self.termination_algorithm
-        f['termination_ind'] = self.termination_ind     
+        grp['DOF'] = self.DOF
+        grp['DOF'].attrs['algorithm'] = self.DOF_algorithm
+        grp['termination_condition'] = self.termination_condition
+        grp['termination_condition'].attrs['algorithm'] = self.termination_algorithm
+        grp['termination_ind'] = self.termination_ind     
             
             
-    def _load(self, f):
+    def _load(self, grp):
         """
         Loads a reconstruction object from an h5 file. 
         
         Properties are not loaded - they will be re-calculated when called
         """
+        super()._load(grp)
         
-        self.B = f['B'][...]
-        self.logL = f['logL'][...]
-        self.chisq = f['chisq'][...]
-        self.background = f['background'][...]
-        self.initial_guess = f['initial_guess'][...]
+        self.B = grp['B'][...]
+        self.logL = grp['logL'][...]
+        self.chisq = grp['chisq'][...]
+        self.background = grp['background'][...]
             
             
     @cached_property
