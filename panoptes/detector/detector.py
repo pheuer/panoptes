@@ -363,21 +363,21 @@ class PinholeArrayImage(Data2D):
         
         super().__init__(*args, **kwargs)
         
-        
         if pinhole_array is not None:
             # pinhole_array can be either a PinholeArray object or a 
             # name of a defined pinhole array
             
             # If a pinhole array object is provided, assign it
-            if isinstance(args[0], PinholeArray):
-                self.pinholes = args[0]
+            if isinstance(pinhole_array, PinholeArray):
+                self.pinholes = pinhole_array
             # If a string is provided, assume it is a pinhole array name or
             # a filepath
-            elif isinstance(args[0], str):
-                self.path = args[0]
-                self.load(self.path)
-            
-            self.pinholes = PinholeArray(pinhole_array)
+            elif isinstance(pinhole_array, str):
+                self.pinholes = PinholeArray(pinhole_array)
+                print(self.pinholes)
+            else:
+                raise ValueError("Invalid pinhole_array keyword: "
+                                 f"{pinhole_array}, type {type(pinhole_array)}")
 
         
         
@@ -463,12 +463,6 @@ class PenumbralImageGelfgat(PinholeArrayImage):
         super().__init__(*args, **kwargs)  
         
         
-        
-        
- 
-        
-        
-        
     def _save(self, grp):
         super()._save(grp)
             
@@ -492,7 +486,8 @@ class PenumbralImageGelfgat(PinholeArrayImage):
             self.reconstruction = GelfgatResult(grp['reconstruction'])
 
     
-    def make_tmat(self, tmat_path, xyo=None, R_ap=None, L_det=350*u.cm, oshape=(101, 101)):
+    def make_tmat(self, tmat_path, xyo=None, R_ap=None, L_det=350*u.cm, oshape=(101, 101),
+                  mag=None):
         
             
         if self.stack is None:
@@ -503,7 +498,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
             
             
         if xyo is None:
-            xlim = 80
+            xlim = 100
             xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
             yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
         else:
@@ -513,7 +508,9 @@ class PenumbralImageGelfgat(PinholeArrayImage):
         # Assume for now that we are getting a tmat for a stacked image
         # so there is only one aperture and it is centered
         ap_xy = np.array([[0,0],])*u.cm / R_ap
-        mag = float(self.pinholes.mag_r)
+        
+        if mag is None:
+            mag = float(self.pinholes.mag_r)
         
         psf = np.concatenate((np.ones(50), np.zeros(50)))
         psf_ax = np.linspace(0, 2*R_ap, num=100)/R_ap
@@ -522,7 +519,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
         yi = self.stack.yaxis/ R_ap / mag
         
         
-        c = 4
+        c = 1
         xi = xi[::c]
         yi = yi[::c]
         
@@ -546,7 +543,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
             
     
     
-    def reconstruct(self, recon_path, tmat_path):
+    def reconstruct(self, tmat_path):
     
         print("Load tmat")
         tmat = TransferMatrix(tmat_path)
@@ -554,7 +551,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
         
         print("Do reconstruction")
         
-        c=4
+        c=1
         data = self.stack.data[::c, ::c] 
         
         self.reconstruction = gelfgat_poisson(data.flatten(), tmat, 50, h_friction=3)
@@ -571,8 +568,13 @@ class PenumbralImageGelfgat(PinholeArrayImage):
         img = self.reconstruction.solution
         
         
+        # Pick vmax from the center region to avoid edge artifacts
+        nx, ny = img.shape
+        vmax = np.max(img[int(0.33*nx):int(0.66*nx),
+                          int(0.33*ny):int(0.66*ny),])
+        
         fig, ax = plt.subplots()
-        ax.pcolormesh(xo, yo, img.T)
+        ax.pcolormesh(xo, yo, img.T, vmax=vmax)
         ax.set_aspect('equal')
         ax.set_xlabel("X (um)")
         ax.set_ylabel("Y (um)")        

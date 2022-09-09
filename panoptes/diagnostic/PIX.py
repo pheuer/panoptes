@@ -154,7 +154,7 @@ if __name__ == '__main__':
         
     
     if obj.data.reconstruction is None:
-        obj.data.reconstruct(save_path, tmat_path)
+        obj.data.reconstruct( tmat_path)
         obj.save(save_path)
         
         

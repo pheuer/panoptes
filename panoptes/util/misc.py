@@ -28,7 +28,7 @@ def identify_filetype(path):
         return 'cpsa'
     
     else:
-        raise ValueError(f"Unrecognized file extension: {ext}")
+        raise ValueError(f"Unrecognized file extension: {ext} in path {path}")
     
 
         

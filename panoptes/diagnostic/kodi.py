@@ -79,25 +79,56 @@ class KoDI(Diagnostic):
             
             
             
-    def process(self):
+    def process(self, **kwargs):
+        
+        # Make sure all cuts are applied
+        self.scan.apply_cuts()
         
         # Create a PenumbralImageGelfgat object using the data from
         # the current subset and dslices
         xaxis, yaxis, data = self.scan.frames()
-        dslice_data = PenumbralImageGelfgat(xaxis, yaxis, data,
+
+        dslice_data = PenumbralImageGelfgat(xaxis*u.cm, yaxis*u.cm, data,
                                            pinhole_array=self.pinhole_array)
         
         # Store this object in the subset's dslice list.
         self.scan.current_subset.set_dslice_data(dslice_data)
         
         obj = self.scan.current_subset.current_dslice_data
+              
+        obj.fit_pinholes(**kwargs)
         
-        obj.fit_pinholes()
-            
+        obj.stack_pinholes()
+        
+        
+        self.scan.current_subset.dslice_data[self.scan.current_subset.current_dslice_i] = obj
+        
+     
+    def calculate_tmat(self, tmat_path, mag=None):
+        obj = self.scan.current_subset.current_dslice_data
+        
+        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(81, 81),
+                      mag = mag)
+        
+
+    def reconstruct(self, tmat_path):
+        
+        obj = self.scan.current_subset.current_dslice_data
+        obj.reconstruct(tmat_path)
+        
+        obj.reconstruction.iter_plot()
+        obj.plot_reconstruction()
+        
+
+
 
     def _save(self, grp):
         
         super()._save(grp)
+        
+        if self.pinhole_array is not None:
+            grp['pinhole_array'] = self.pinhole_array
+        
         
         scangrp = grp.create_group('scan')
         
@@ -118,12 +149,16 @@ class KoDI(Diagnostic):
                 if self.scan.current_subset.dslice_data[j] != None:
                     self.scan.current_subset.dslice_data[j].save(dslice_grp)
                     
-            
-        
         
     def _load(self, grp):
         super()._load(grp)
         
+        if 'pinhole_array' in grp.keys():
+            # Note that h5py reads in strings as byte stirngs, so we need to convert
+            # also, for some reason [()] seems to be the preferred indexing
+            # to load this scalar?
+            self.pinhole_array = grp['pinhole_array'][()].decode('utf-8')
+
         scangrp = grp['scan']
         
         # First load the CR39 scan object
@@ -158,11 +193,13 @@ if __name__ == '__main__':
     data_path = os.path.join(data_dir, '103955', '103955_TIM5_PR3148_2h_s7_20x.cpsa')
     save_path = os.path.join(data_dir, '103955', 'kodi_test.h5')
     
+    tmat_path = os.path.join(data_dir, '103955', 'tmat_kodi.h5')
+    
     
     if not os.path.isfile(save_path):
         obj = KoDI(data_path, pinhole_array = 'D-PF-C-055_A', run_cli=False)
         
-        obj.scan.current_subset.set_domain(Cut(xmax=-0.25))
+        obj.scan.current_subset.set_domain(Cut(xmin=-4.7, xmax=-0.25))
         obj.scan.add_cut(Cut(cmin=35))
         obj.scan.add_cut(Cut(dmin=12))
         obj.scan.cutplot()
@@ -181,6 +218,26 @@ if __name__ == '__main__':
         obj = KoDI(save_path)
         
         
-    obj.process()
+    obj.scan.select_subset(0)
+        
+        
+    #if obj.scan.current_subset.current_dslice_data is None:           
+    obj.process( auto_select_apertures=True, 
+                rough_adjust={'dx':-0.3, 'dy':-0.1, 'mag_s':36, 'rot':18},)
+    
+
+    #obj.save(save_path)
+    
+        
+        
+    obj.scan.current_subset.current_dslice_data.plot_stack()
+    #if obj.scan.current_subset.current_dslice_data.tmat is None:
+    obj.calculate_tmat(tmat_path, mag=35.8)
+        
+        
+    #if obj.scan.current_subset.current_dslice_data.reconstruction is None:
+    obj.reconstruct(tmat_path)
+    
+    
     
     obj.save(save_path)

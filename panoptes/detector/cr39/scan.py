@@ -141,7 +141,7 @@ class Scan(BaseObject):
         self.trackdata = trackgrp['trackdata'][...]
         
         # Load the axes
-        axesgrp = trackgrp.create_group('axes')
+        axesgrp = trackgrp['axes']
         for key, val in self.axes.items():
             self.axes[key] = axesgrp[key][...]
 

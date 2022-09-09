@@ -180,7 +180,6 @@ class PinholeArray(BaseObject):
         if key in self.adjustment.keys():
             return self.adjustment[key]
         else:
-            print(list(self.adjustment.keys()))
             raise KeyError(f"PinholeArray has no attribute {key}")
             
             
@@ -330,7 +329,8 @@ class PinholeArray(BaseObject):
                       auto_select_apertures=False,
                       # Aperture fitting
                       aperture_model='penumbra',
-                      plots=True):
+                      plots=True,
+                      **kwargs):
         
         """
         Fits the pinhole array to data through a multiple step process.
@@ -590,7 +590,7 @@ class PinholeArray(BaseObject):
         
         
         # run auto-select to at least get an intelligently chosen baseline
-        self._auto_select_apertures_to_fit(xaxis, yaxis, data, variable=variable,
+        self._auto_select_apertures(xaxis, yaxis, data, variable=variable,
                                            border=border)
         
         
@@ -906,11 +906,8 @@ class PinholeArray(BaseObject):
                                                      border=border)
             
             
-        print(self.mag_r)
-        print(self.diameter)
-        
         if width is None:
-            width = 1.5*(self.mag_r*self.diameter)
+            width = 2*(self.mag_r*self.diameter)
             
         
             
@@ -951,9 +948,7 @@ class PinholeArray(BaseObject):
         for i, ind in enumerate(use_ind):
             x0 = np.argmin(np.abs(xaxis - (self.pinhole_centers[i,0])))
             y0 = np.argmin(np.abs(yaxis - (self.pinhole_centers[i,1])))
-            
-            print(self.pinhole_centers[i,:])
-            
+
             data_subset = data[x0-wx:x0+wx, y0-wy:y0+wy]
 
             output[...,i] = data_subset
@@ -968,6 +963,11 @@ class PinholeArray(BaseObject):
         
     
     
+    def plot_stack(self):
+        
+        fig, ax = plt.subplots()
+        
+
     def plot_with_data(self, xaxis, yaxis, data, *args):
         # Clear figure if it already exists
 
