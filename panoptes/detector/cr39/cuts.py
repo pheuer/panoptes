@@ -10,6 +10,8 @@ import h5py
 from panoptes.util.base import BaseObject
 from panoptes.util.misc import identify_filetype
 
+import warnings
+
 class Subset(BaseObject):
     """
     A subset of the track data. The subset is defined by a domain, a list
@@ -170,11 +172,30 @@ class Subset(BaseObject):
         if not isinstance(ndslices, int) or ndslices < 0:
             print("ndslices must be an integer > 0, but the provided value"
                   f"was {ndslices}")
+            
+        if not all(x==None for x in self.dslice_data):
+            
+            raise ValueError("Changing the number of ndslices will delete "
+                             "any existing data stored in the dslice_data "
+                             "list! To do this, call the method "
+                             "`reset_dslice_data` before attempting to "
+                             "change the number of ndslicse.")
+            
         else:
             self.ndslices = int(ndslices)
             
-            # Create a new, empty list of dslice_data
-            self.dslice_data = [None] * self.ndslices
+            self.reset_dslice_data()
+            
+    def reset_dslice_data(self):
+        """
+        Reset the dslice data array to be empty. 
+        
+        You are required to do this manually before changing the number of
+        dslices, to confirm that you really want to do this!
+        """
+        
+        # Create a new, empty list of dslice_data
+        self.dslice_data = [None] * self.ndslices
             
     def set_dslice_data(self, *args):
         if len(args)==1:
@@ -187,8 +208,9 @@ class Subset(BaseObject):
             raise ValueError(f"Invalid number of arguments: {len(args)}")
         self.dslice_data[i] = data
         
+    @property
     def current_dslice_data(self):
-        return self.dslice_data[self.current_dslices_i]
+        return self.dslice_data[self.current_dslice_i]
         
             
     def add_cut(self, c):

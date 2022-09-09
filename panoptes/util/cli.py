@@ -20,6 +20,7 @@ def _cli_input(mode='alphanumeric list'):
         Alternating alpha and numeric key value pairs, comma separated
         Letters are only acceptable in the values if they are 'none'
     """
+    yesno = set('yn')
     integers = set('123456790+-')
     floats = integers.union(".e")
     alphas = set('abcdefghijklmnopqrstuvwxyz')
@@ -33,6 +34,10 @@ def _cli_input(mode='alphanumeric list'):
             
         elif mode=='alpha-integer':
             if set(x).issubset(integers.union(alphas)):
+                return x
+            
+        elif mode == 'yn':
+            if set(x).issubset(yesno):
                 return x
 
         elif mode=='alpha-integer list':

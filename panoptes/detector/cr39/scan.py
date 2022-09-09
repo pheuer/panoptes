@@ -32,7 +32,11 @@ class Scan(BaseObject):
 
     # Axes dictionary for trackdata
     axes_ind = {'X':0, 'Y':1, 'D':2, 'C':3, 'E':5, 'Z':6}
-    ind_axes = ['X', 'Y', 'D', 'C', 'E', 'Z']
+
+    
+    axes = {'X':0, 'Y':0, 'D':0,
+            'C':0, 'E':0, 'Z':0}
+    
     
     def __init__(self, *args, verbose=False, subsets=None):
         
@@ -101,14 +105,23 @@ class Scan(BaseObject):
         
         super()._save(grp)
         
-        grp.attrs['current_subset_i'] = self.current_subset_i
+        trackgrp = grp.create_group('tracks')
         
-        grp.create_dataset('trackdata', self.trackdata.shape,
+        trackgrp.attrs['current_subset_i'] = self.current_subset_i
+        
+        trackgrp.create_dataset('trackdata', self.trackdata.shape,
                            compression='gzip', compression_opts=3,
                            dtype='f4')
 
-        grp['trackdata'][...] = self.trackdata.astype(np.dtype('f4'))
+        trackgrp['trackdata'][...] = self.trackdata.astype(np.dtype('f4'))
         
+        # Save the axes
+        axesgrp = trackgrp.create_group('axes')
+        for key, val in self.axes.items():
+            axesgrp[key] = val
+            axesgrp[key].attrs['unit'] = 'cm' 
+        
+        # Create groups for each subset
         for i, subset in enumerate(self.subsets):
             subset_grp = grp.create_group(f"subset_{i}")
             subset.save(subset_grp)
@@ -120,9 +133,18 @@ class Scan(BaseObject):
         """
         super()._load(grp)
         
-        self.current_subset_i = int(grp.attrs['current_subset_i'])
+        
+        trackgrp = grp['tracks']
+        
+        self.current_subset_i = int(trackgrp.attrs['current_subset_i'])
     
-        self.trackdata = grp['trackdata'][...]
+        self.trackdata = trackgrp['trackdata'][...]
+        
+        # Load the axes
+        axesgrp = trackgrp.create_group('axes')
+        for key, val in self.axes.items():
+            self.axes[key] = axesgrp[key][...]
+
         
         # Load the cuts
         # Initialize the subsets list as empty
@@ -208,8 +230,8 @@ class Scan(BaseObject):
             
             # Collect x and y positions of frames in sets that, once sorted
             # will be the x and y axes of the dataset
-            self.xax = np.zeros(self.nx)
-            self.yax = np.zeros(self.ny)
+            self.axes['X'] = np.zeros(self.nx)
+            self.axes['Y'] = np.zeros(self.ny)
             for i in range(self.nframes):
                 if i % 5000 == 4999:
                     self._log(f"Reading frame {i+1}/{self.nframes}")
@@ -236,8 +258,8 @@ class Scan(BaseObject):
                 self.frame_headers.append(fh)
                 
                 # Put the bin x and y values in the appropriate place in the axes
-                self.xax[fh.x_ind] = fh.xpos*1e-5
-                self.yax[fh.y_ind] = fh.ypos*1e-5
+                self.axes['X'][fh.x_ind] = fh.xpos*1e-5
+                self.axes['Y'][fh.y_ind] = fh.ypos*1e-5
    
                 # Increment the counters for the number of hits
                 tot_hits += fh.hits
@@ -321,12 +343,12 @@ class Scan(BaseObject):
         self.trackdata = np.copy(self.trackdata_subset)
         
         # Sort the yaxis (it's backwards...)
-        self.yax = np.sort(self.yax)
+        self.axes['Y'] = np.sort(self.axes['Y'])
         
         # Make axes for the other quantites
-        self.dax = np.linspace(0, 20, num=40)
-        self.cax = np.linspace(0, 80, num=80)
-        self.eax = np.linspace(0, 50, num=60)
+        self.axes['D'] = np.linspace(0, 20, num=40)
+        self.axes['C'] = np.linspace(0, 80, num=80)
+        self.axes['E'] = np.linspace(0, 50, num=60)
         
         
     @property
@@ -366,24 +388,19 @@ class Scan(BaseObject):
             If set, replaces the default axes 
         
         """
-
-        
-        axdict = {'X':self.xax, 'Y':self.yax, 'D':self.dax,
-                'C':self.cax, 'E':self.eax}
-        
         i0 = self.axes_ind[axes[0]]
         i1 = self.axes_ind[axes[1]]
         
         if hax is None:
-            ax0 = axdict[axes[0]]
+            ax0 = self.axes[axes[0]]
         else:
             ax0 = hax
             
         if vax is None:
-            ax1 = axdict[axes[1]]
+            ax1 = self.axes[axes[1]]
         else:
             ax1 = vax
-        
+            
         # If creating a histogram like the X,Y,D plots
         if len(axes) == 3:
             i2 = self.axes_ind[axes[2]]
@@ -699,7 +716,25 @@ class Scan(BaseObject):
                 else:
                     ind = split[1]
                     
+                    
+                # Issue a warning if the user is about to delete data on
+                # the dslice_data list
+                if not all(x==None for x in self.current_subset.dslice_data):
+                    print("Warning: changing the number of ndslices will "
+                          "delete the data you have stored in the "
+                          "dslice_data array. Do you want to proceed? (y/n)")
+                    
+                    yn = _cli_input(mode='yn')
+                    
+                    if yn == 'y':
+                        self.current_subset.reset_dslice_data() 
+                    else:
+                        break
+                        
                 self.current_subset.set_ndslices(int(ind))
+                        
+                    
+                
 
                     
             elif x in ['p', 'pi']:

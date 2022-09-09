@@ -81,13 +81,18 @@ class KoDI(Diagnostic):
             
     def process(self):
         
-        # Create a histogram, save as a Data2D object within
-        # the dslice group
+        # Create a PenumbralImageGelfgat object using the data from
+        # the current subset and dslices
         xaxis, yaxis, data = self.scan.frames()
         dslice_data = PenumbralImageGelfgat(xaxis, yaxis, data,
                                            pinhole_array=self.pinhole_array)
         
+        # Store this object in the subset's dslice list.
         self.scan.current_subset.set_dslice_data(dslice_data)
+        
+        obj = self.scan.current_subset.current_dslice_data
+        
+        obj.fit_pinholes()
             
 
     def _save(self, grp):
@@ -103,18 +108,13 @@ class KoDI(Diagnostic):
         # Next, save every individual histogram as a PenumbraImageGelfgat
         # object within the folder
        
-        print('saving')
         for i, subset in enumerate(self.scan.subsets):
             self.scan.select_subset(i)
             subset_grp = scangrp[f"subset_{i}"]
             
-            
-            print(f"ndslies: {self.scan.current_subset.ndslices}")
-            print(f"dslice_data: {self.scan.current_subset.dslice_data}")
             for j in range(self.scan.current_subset.ndslices):
                 dslice_grp = subset_grp.create_group(f"dslice_{j}")
-            
-                print(j)
+
                 if self.scan.current_subset.dslice_data[j] != None:
                     self.scan.current_subset.dslice_data[j].save(dslice_grp)
                     
@@ -129,17 +129,13 @@ class KoDI(Diagnostic):
         # First load the CR39 scan object
         self.scan = Scan(scangrp)
         
-        print('Loading')
         for i, subset in enumerate(self.scan.subsets):
             self.scan.select_subset(i)
             subset_grp = scangrp[f"subset_{i}"]
             
-            print(f"ndslies: {self.scan.current_subset.ndslices}")
-            print(f"dslice_data: {self.scan.current_subset.dslice_data}")
             for j in range(self.scan.current_subset.ndslices):
                 dslice_grp = subset_grp[f"dslice_{j}"]
                 
-                print(j)
                 # If the group isn't empty, try to load it as a 
                 # PenumbralImageGelfgat object
                 if len(list(dslice_grp.keys())) != 0:
@@ -171,8 +167,6 @@ if __name__ == '__main__':
         obj.scan.add_cut(Cut(dmin=12))
         obj.scan.cutplot()
         
-        obj.process()
-        
         # Create a new subset and select it
         obj.scan.add_subset()
         obj.scan.select_subset(1)
@@ -185,3 +179,8 @@ if __name__ == '__main__':
         obj.save(save_path)
     else:
         obj = KoDI(save_path)
+        
+        
+    obj.process()
+    
+    obj.save(save_path)
