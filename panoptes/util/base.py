@@ -61,22 +61,25 @@ class BaseObject(ABC):
             self.path = path.file.filename
             self.group = path.name
             self._save(path)
+            
+        # If a directory is provided, pass this directly to the _save method
+        # to deal with
+        elif os.path.isdir(path):
+            self.path = path
+            self.group = '/'
+            self._save(path)
                 
-        # If a file or a valid path for a file with write access is provided
-        elif os.path.isfile(path) or os.access(os.path.dirname(path), os.W_OK):
+        # If a string, assume it is a file path and oepn the file to write
+        elif isinstance(path, str):
             self.path = path
             self.group = '/'
             with h5py.File(self.path, 'a') as f:
                 if group is not None:
                     grp = f[group]
                 else:
-                    grp = f
+                    grp = f['/']
                 
                 self._save(grp)
-        
-        # If a directory, then ?
-        elif os.path.isdir(path):
-            raise NotImplementedError("Saving to directory not yet implemented")
         
         else:
             raise ValueError(f"Invalid path of type {type(path)}: {path}")
@@ -99,8 +102,16 @@ class BaseObject(ABC):
             self._load(path)
             
             
+        # If a directory, then pass that directly to the _load method to deal
+        # with.
+        elif os.path.isdir(path):
+            self.path = path
+            self.group = group
+            self._load(path)
+            
+            
         # If a string path, open the file
-        elif os.path.isfile(path):
+        elif isinstance(path, str):
             self.path = path
             self.group = group
         
@@ -109,13 +120,11 @@ class BaseObject(ABC):
                 if group is not None:
                     grp = f[group]
                 else:
-                    grp = f
+                    grp = f['/']
                 
                 self._load(grp)
         
-        # If a directory, then ?
-        elif os.path.isdir(path):
-            raise NotImplementedError("Loading from directory not yet implemented")
+        
         
         else:
             raise ValueError(f"Invalid path of type {type(path)}: {path}")

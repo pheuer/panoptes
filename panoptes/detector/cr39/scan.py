@@ -101,7 +101,6 @@ class Scan(BaseObject):
         
         super()._save(grp)
         
-        grp.attrs['path'] = self.path
         grp.attrs['current_subset_i'] = self.current_subset_i
         
         grp.create_dataset('trackdata', self.trackdata.shape,
@@ -110,21 +109,10 @@ class Scan(BaseObject):
 
         grp['trackdata'][...] = self.trackdata.astype(np.dtype('f4'))
         
-        subsets_grp = grp.create_group('subsets')
         for i, subset in enumerate(self.subsets):
-            subset_grp = subsets_grp.create_group(f"subset_{i}")
+            subset_grp = grp.create_group(f"subset_{i}")
             subset.save(subset_grp)
             
-            self.select_subset(i)
-            
-            # Create a histogram, save as a Data2D object within
-            # the subset group
-            xaxis, yaxis, data = self.frames()
-            subset_data = Data2D(xaxis, yaxis, data)
-            subset_data.save(subset_grp)
-            
-
-
             
     def _load(self, grp):
         """
@@ -132,7 +120,6 @@ class Scan(BaseObject):
         """
         super()._load(grp)
         
-        self.path = str(grp.attrs['path'])
         self.current_subset_i = int(grp.attrs['current_subset_i'])
     
         self.trackdata = grp['trackdata'][...]
@@ -140,9 +127,10 @@ class Scan(BaseObject):
         # Load the cuts
         # Initialize the subsets list as empty
         self.subsets = []
-        subsets_grp = grp["subsets"]
-        for key in subsets_grp:
-            self.subsets.append(Subset(subsets_grp[key]))
+        
+        for key in grp:
+            if 'subset' in key:
+                self.subsets.append(Subset(grp[key]))
             
             
         self.apply_cuts()
@@ -564,11 +552,11 @@ class Scan(BaseObject):
         # Calculate the bin edges for each dslice
         # !! note that the tracks are already sorted into order by diameter
         # when the CR39 data is read in
-        if self.current_subset.current_dslice is not None:
+        if self.current_subset.ndslices != 1:
             # Figure out the dslice width
             dbin = int(self.trackdata_subset.shape[0]/self.current_subset.ndslices)
             # Extract the appropriate portion of the tracks
-            b0 = self.current_subset.current_dslice*dbin
+            b0 = self.current_subset.current_dslice_i*dbin
             b1 = b0 + dbin
             self.trackdata_subset = self.trackdata_subset[b0:b1, :]
 

@@ -48,9 +48,19 @@ class Subset(BaseObject):
     """
 
     def __init__(self, *args, domain=None, ndslices=None):
-        super().__init__()
         
         self.cuts = []
+        
+        # This list is not used internally but can be filled with data
+        # by an external function using set_dslice_data() and then
+        # accessed using the current_dslice_data() function.
+        # If you want to save or load this data, it will need to be done
+        # externally! 
+        self.dslice_data = []
+        
+        super().__init__()
+        
+        
         
         if domain is not None:
             self.set_domain(domain)
@@ -61,9 +71,8 @@ class Subset(BaseObject):
             
         # By default, set the number of dslices to be 1
         if ndslices is None:
-            self.ndslices = 1
-        else:
-            self.set_ndslices(ndslices)
+            ndslices = 1
+        self.set_ndslices(ndslices)
             
         # Index of currently selected slice
         # if None, include all slices
@@ -114,7 +123,7 @@ class Subset(BaseObject):
         """
         super()._load(grp)
         
-        self.ndslices = int(grp.attrs['ndslices'])
+        self.set_ndslices(int(grp.attrs['ndslices']))
         self.current_dslice_i = grp.attrs['current_dslice_i']
             
         # Load the domain
@@ -163,7 +172,25 @@ class Subset(BaseObject):
                   f"was {ndslices}")
         else:
             self.ndslices = int(ndslices)
+            
+            # Create a new, empty list of dslice_data
+            self.dslice_data = [None] * self.ndslices
+            
+    def set_dslice_data(self, *args):
+        if len(args)==1:
+            data = args[0]
+            i = self.current_dslice_i
+        elif len(args)==2:
+            data = args[0]
+            i=args[1]
+        else:
+            raise ValueError(f"Invalid number of arguments: {len(args)}")
+        self.dslice_data[i] = data
         
+    def current_dslice_data(self):
+        return self.dslice_data[self.current_dslices_i]
+        
+            
     def add_cut(self, c):
         self.cuts.append(c)
            
@@ -180,8 +207,8 @@ class Subset(BaseObject):
                              f"{len(self.cuts)} cuts.")
         else:
             self.cuts[i] = c
-
-
+            
+            
 
 class Cut(BaseObject):
     """
