@@ -2,7 +2,7 @@
 """
 Define the base saveable object class
 """
-
+import os
 import h5py
 from abc import ABC
 
@@ -16,7 +16,7 @@ class BaseObject(ABC):
     
     """
     
-    def __init__(self):
+    def __init__(self, **kwargs):
         # The path to the file
         self.path = None
         # The group within the h5 file where this is stored.
@@ -62,7 +62,8 @@ class BaseObject(ABC):
             self.group = path.name
             self._save(path)
                 
-        else:
+        # If a file or a valid path for a file with write access is provided
+        elif os.path.isfile(path) or os.access(os.path.dirname(path), os.W_OK):
             self.path = path
             self.group = '/'
             with h5py.File(self.path, 'a') as f:
@@ -72,6 +73,14 @@ class BaseObject(ABC):
                     grp = f
                 
                 self._save(grp)
+        
+        # If a directory, then ?
+        elif os.path.isdir(path):
+            raise NotImplementedError("Saving to directory not yet implemented")
+        
+        else:
+            raise ValueError(f"Invalid path of type {type(path)}: {path}")
+            
 
 
     def load(self, path, group='/'):
@@ -89,7 +98,9 @@ class BaseObject(ABC):
             self.group = path.name
             self._load(path)
             
-        else:
+            
+        # If a string path, open the file
+        elif os.path.isfile(path):
             self.path = path
             self.group = group
         
@@ -101,3 +112,12 @@ class BaseObject(ABC):
                     grp = f
                 
                 self._load(grp)
+        
+        # If a directory, then ?
+        elif os.path.isdir(path):
+            raise NotImplementedError("Loading from directory not yet implemented")
+        
+        else:
+            raise ValueError(f"Invalid path of type {type(path)}: {path}")
+            
+  

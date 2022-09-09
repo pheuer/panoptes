@@ -57,9 +57,6 @@ class XrayIP(XrayDetector2D):
                              f"class {self.__class__.__name__}")
             
 
-
-
-
     def read_data(self):
         """
         Reads data from an OMEGA xray image plate scan file

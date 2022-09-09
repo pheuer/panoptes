@@ -134,7 +134,7 @@ class Scan(BaseObject):
         
         self.path = str(grp.attrs['path'])
         self.current_subset_i = int(grp.attrs['current_subset_i'])
-        
+    
         self.trackdata = grp['trackdata'][...]
         
         # Load the cuts
@@ -157,10 +157,10 @@ class Scan(BaseObject):
     @property
     def current_subset(self):
         return self.subsets[self.current_subset_i]
-            
-
-        
+          
     def _read_CPSA(self, path):
+        
+        print(f"Reading .cpsa file")
 
         with open(path, 'rb') as file:
 
@@ -870,10 +870,9 @@ class Scan(BaseObject):
         fig, axarr = self.cutplotfig
         
         title = f"Subset {self.current_subset_i}, "
-        if self.current_subset.current_dslice is None:
-            title += 'All dslices selected'
-        else:
-            title += f"dslice {self.current_subset.current_dslice} selected"
+
+        title += (f"dslice {self.current_subset.current_dslice_i} of "
+                 f"{self.current_subset.ndslices} selected.")
         fig.suptitle(title)
                 
         # X, Y

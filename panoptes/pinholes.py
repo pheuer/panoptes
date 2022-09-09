@@ -34,6 +34,7 @@ from IPython import get_ipython
 
 from panoptes.util.misc import _compressed
 from panoptes.util.base import BaseObject
+from panoptes.util.misc import identify_filetype
 
 
 def _penumbra_model(axes, data, radius, amp, xc,yc, mag_r,sigma,background):
@@ -103,7 +104,7 @@ def _adjust_xy(xy, dx, dy, rot, mag_s, skew, skew_angle, hreflect, vreflect):
 
 class PinholeArray(BaseObject):
     
-    def __init__(self, *args, pinhole_name=None, plots=False):
+    def __init__(self, *args, plots=False):
         """
         arg : str
             Either a path to a file from which the pinhole can be loaded 
@@ -147,38 +148,34 @@ class PinholeArray(BaseObject):
         if len(args) == 0:
             pass
         elif len(args) == 1:
-            self.path = args[0]
-            self.load(self.path)
-        else:
-            raise ValueError(f"Invalid number of arguments: {len(args)}")
             
+            # First assume the argument is an id and try to load from that
+            try:
+                self.load_defined_pinhole_array(args[0])
+            except ValueError:
+                self.path = args[0]
+                filetype = identify_filetype(self.path)
+        
+                if filetype == self.__class__.__name__:
+                    self.load(self.path)
+           
+                else:
+                    raise ValueError(f"File {self.path} data type {filetype} "
+                                     "is not valid for class "
+                                     f"{self.__class__.__name__}")
+                    
+        else:
+            raise ValueError(f"Invalid number of arguments ({len(args)} for "
+                             f"class {self.__class__.__name__}.")
+                
+        
 
         
     # *************************************************************************
     # Basic methods
     # *************************************************************************
             
-    def set_pinhole_array(self, pinhole_name):
-        self._defined_pinhole(pinhole_name)
-        
-        self._init_pinhole_variables()
-        
-        
-    def _init_pinhole_variables(self):
-        # Indices of pinholes to use for fitting the array model
-        self.use_for_fit = np.ones(self.npinholes).astype(bool)
-        # Indices of pinholes to stack
-        self.use_for_stack = np.ones(self.npinholes).astype(bool)
-        
-        # The locations of the pinhole centers
-        # (determined by fitting each aperture image)
-        self.pinhole_centers = self.xy
-        
-        if self.plots:
-            self.plot()
-        
     
-            
     def __getattr__(self, key):
         if key in self.adjustment.keys():
             return self.adjustment[key]
@@ -297,9 +294,15 @@ class PinholeArray(BaseObject):
         return self.xy.shape[0]
             
 
-    def _defined_pinhole(self, id):
+    def load_defined_pinhole_array(self, id):
         """
         Load data about a defined pinhole array from its id number
+        
+        Raises
+        ------
+        Value Error
+            If no pinhole array is found matching that ID
+        
         """
         self.id = id
         
@@ -307,6 +310,15 @@ class PinholeArray(BaseObject):
 
         # Store a copy of the unchanged coordinates for reference
         self.xy_prime = np.copy(self.xy) 
+        
+        # Indices of pinholes to use for fitting the array model
+        self.use_for_fit = np.ones(self.npinholes).astype(bool)
+        # Indices of pinholes to stack
+        self.use_for_stack = np.ones(self.npinholes).astype(bool)
+        
+        # The locations of the pinhole centers
+        # (determined by fitting each aperture image)
+        self.pinhole_centers = self.xy
         
     
     def fit(self, xaxis, yaxis, data,
@@ -1088,3 +1100,5 @@ def pinhole_array_info(name):
         
         
         return  xy, spacing, diameter, material, thickness
+    else:
+        raise ValueError(f"No defined pinhole matches the id: {id}")

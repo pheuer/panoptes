@@ -67,7 +67,7 @@ class Subset(BaseObject):
             
         # Index of currently selected slice
         # if None, include all slices
-        self.set_current_dslice(None)
+        self.set_current_dslice(0)
         
         # If an argument is provided, load the cut from that
         if len(args)==0:
@@ -94,10 +94,10 @@ class Subset(BaseObject):
         super()._save(grp)
 
         grp.attrs['ndslices'] = self.ndslices
-        if self.current_dslice is None:
-            grp.attrs['current_dslice'] = np.nan
+        if self.current_dslice_i is None:
+            grp.attrs['current_dslice_i'] = np.nan
         else:
-            grp.attrs['current_dslice'] = self.current_dslice
+            grp.attrs['current_dslice_i'] = self.current_dslice_i
             
         # Save the domain as a cut
         domain_grp = grp.create_group('domain')
@@ -115,10 +115,7 @@ class Subset(BaseObject):
         super()._load(grp)
         
         self.ndslices = int(grp.attrs['ndslices'])
-        if np.isnan(grp.attrs['current_dslice']):
-            self.current_dslice = None
-        else:
-            self.current_dslice = grp.attrs['current_dslice']
+        self.current_dslice_i = grp.attrs['current_dslice_i']
             
         # Load the domain
         self.domain = Cut(grp['domain'])
@@ -138,10 +135,7 @@ class Subset(BaseObject):
             for i,cut in enumerate(self.cuts):
                 s += f"Cut {i}: {str(cut)}\n"
         s += f"Num. dslices: {self.ndslices} "
-        if self.current_dslice is None:
-            s += '[All dslices selected]\n'
-        else:
-            s += f"[Selected dslice index: {self.current_dslice}]\n"
+        s += f"[Selected dslice index: {self.current_dslice_i}]\n"
                 
         return s
                
@@ -153,12 +147,12 @@ class Subset(BaseObject):
         
     def set_current_dslice(self, i):
         if i is None:
-            self.current_dslice = None
+            self.current_dslice_i = 0
         elif i > self.ndslices-1:
             print(f"Cannot select the {i} dslice, there are only "
                              f"{self.ndslices} dslices.")
         else:
-            self.current_dslice = i
+            self.current_dslice_i = i
         
     def set_ndslices(self, ndslices):
         """

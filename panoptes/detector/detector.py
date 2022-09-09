@@ -21,13 +21,18 @@ from IPython import get_ipython
 
 
 from panoptes.util.base import BaseObject
-
+from panoptes.pinholes import PinholeArray
+from panoptes.reconstruction.tmat import TransferMatrix
+from panoptes.reconstruction.gelfgat import gelfgat_poisson, GelfgatResult
 
 class Data(BaseObject):
     
     def __init__(self, *args):
+        
         self.data = None
-    
+        
+        super().__init__()
+        
         if len(args) == 0:
             pass
         # If one argument is passed, assume it is a data array OR a filepath
@@ -79,10 +84,13 @@ class Data(BaseObject):
 class Data1D(Data):
     
     def __init__(self, *args):
+        
+        self.xaxis = None
+        
         # Default all to None
         super().__init__()
         
-        self.xaxis = None
+        
 
         # If no arguements are passed, leave as None
         if len(args)==0:
@@ -165,9 +173,11 @@ class Data2D(Data1D):
     
     def __init__(self, *args):
         
+        self.yaxis = None
+        
         # Default all to None
         super().__init__()
-        self.yaxis = None
+        
         
         # If no arguments are passed, leave it all as None
         if len(args)==0:
@@ -341,4 +351,229 @@ class Data2D(Data1D):
             
         
         
+class PinholeArrayImage(Data2D):
+    
+    def __init__(self, *args, pinhole_array = None, **kwargs):
+        
+        # The PinholeArray object
+        self.pinholes = None
+        
+        # The stacked images
+        self.stack = None
+        
+        super().__init__(*args, **kwargs)
+        
+        
+        if pinhole_array is not None:
+            # pinhole_array can be either a PinholeArray object or a 
+            # name of a defined pinhole array
+            
+            # If a pinhole array object is provided, assign it
+            if isinstance(args[0], PinholeArray):
+                self.pinholes = args[0]
+            # If a string is provided, assume it is a pinhole array name or
+            # a filepath
+            elif isinstance(args[0], str):
+                self.path = args[0]
+                self.load(self.path)
+            
+            self.pinholes = PinholeArray(pinhole_array)
+
+        
+        
+        
+    def _save(self, grp):
+        super()._save(grp)
+        
+        if self.pinholes is not None:
+            # Write pinhole object
+            pinholes_grp = grp.create_group('pinholes')
+            self.pinholes.save(pinholes_grp)
+           
+        if self.stack is not None:
+            stack_grp = grp.create_group('stack')
+            self.stack.save(stack_grp)
+            
+    def _load(self, grp):
+        super()._load(grp)
+        
+        if 'pinholes' in grp.keys():
+            self.pinholes = PinholeArray()
+            self.pinholes._load(grp['pinholes'])
+            
+        if 'stack' in grp.keys():
+            self.stack = Data2D(grp['stack'])
+            
+            
+    def fit_pinholes(self, *args, **kwargs):
+        self.pinholes.fit(self.xaxis.to(u.cm).value,
+                          self.yaxis.to(u.cm).value,
+                          self.data,
+                          *args, **kwargs)
+        
+        
+    def stack_pinholes(self):
+       sx, sy, stack =  self.pinholes.stack(self.xaxis.to(u.cm).value,
+                                            self.yaxis.to(u.cm).value, 
+                                            self.data)
+       
+       self.stack = Data2D(sx*u.cm, sy*u.cm, stack)
+       self.plot_stack()
+       
+       
+    def plot_stack(self):
+        
+        fig, ax = plt.subplots()
+        ax.set_aspect('equal')
+        ax.pcolormesh(self.stack.xaxis.to(u.cm).value, 
+                      self.stack.yaxis.to(u.cm).value, self.stack.data.T)    
+        
+        
+    def plot_pinholes(self, *args):
+        """
+        Makes a plot of the x-ray data
+        
+        Uses a sparse sampling of the array to speed up the operation
+        """
+        
+        fig, ax = self.plot(*args, show=False)
+        
+        if self.pinholes is not None:
+            ax.scatter(self.pinholes.xy[self.pinholes.use_for_fit,0], 
+                       self.pinholes.xy[self.pinholes.use_for_fit,1], color='green')
+            
+            ax.scatter(self.pinholes.xy[~self.pinholes.use_for_fit,0], 
+                       self.pinholes.xy[~self.pinholes.use_for_fit,1], color='red')
+            
+        plt.show()
+            
+        return  fig, ax
+    
+    
+    
+class PenumbralImageGelfgat(PinholeArrayImage):
+    
+    def __init__(self, *args, **kwargs):
+        
+        # An instance of TransferMatrix
+        self.tmat = None
+        # An instance of GelfgatResult
+        self.reconstruction = None
+        
+        super().__init__(*args, **kwargs)  
+        
+        
+        
+        
+ 
+        
+        
+        
+    def _save(self, grp):
+        super()._save(grp)
+            
+        if self.tmat is not None:
+            tmat_grp = grp.create_group('tmat')
+            self.tmat.save(tmat_grp)
+            
+        if self.reconstruction is not None:
+           recon_grp = grp.create_group('reconstruction')
+           self.reconstruction.save(recon_grp)
+
+
+    def _load(self, grp):
+        
+        super()._load(grp)
+          
+        if 'tmat' in grp.keys():
+            self.tmat = TransferMatrix(grp['tmat'])
+            
+        if 'reconstruction' in grp.keys():
+            self.reconstruction = GelfgatResult(grp['reconstruction'])
+
+    
+    def make_tmat(self, tmat_path, xyo=None, R_ap=None, L_det=350*u.cm, oshape=(101, 101)):
+        
+            
+        if self.stack is None:
+            raise ValueError("Stack must be assembled before reconstructing")
+            
+        if R_ap is None:
+            raise ValueError("Keyword R_ap must be set.")
+            
+            
+        if xyo is None:
+            xlim = 80
+            xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
+            yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
+        else:
+            xo = xyo[0]/R_ap
+            yo = xyo[1]/R_ap
+    
+        # Assume for now that we are getting a tmat for a stacked image
+        # so there is only one aperture and it is centered
+        ap_xy = np.array([[0,0],])*u.cm / R_ap
+        mag = float(self.pinholes.mag_r)
+        
+        psf = np.concatenate((np.ones(50), np.zeros(50)))
+        psf_ax = np.linspace(0, 2*R_ap, num=100)/R_ap
+        
+        xi = self.stack.xaxis/ R_ap /mag
+        yi = self.stack.yaxis/ R_ap / mag
+        
+        
+        c = 4
+        xi = xi[::c]
+        yi = yi[::c]
+        
+        
+        tmat = TransferMatrix(xo.to(u.dimensionless_unscaled).value,
+                              yo.to(u.dimensionless_unscaled).value,
+                              xi.to(u.dimensionless_unscaled).value,
+                              yi.to(u.dimensionless_unscaled).value,
+                              mag,
+                              ap_xy.to(u.dimensionless_unscaled).value,
+                              psf,
+                              psf_ax.to(u.dimensionless_unscaled).value,
+                              R_ap, 
+                              L_det)
+        
+        
+    
+        tmat.calculate_tmat(tmat_path)
+        
+        self.tmat = tmat
+            
+    
+    
+    def reconstruct(self, recon_path, tmat_path):
+    
+        print("Load tmat")
+        tmat = TransferMatrix(tmat_path)
+        self.tmat = tmat
+        
+        print("Do reconstruction")
+        
+        c=4
+        data = self.stack.data[::c, ::c] 
+        
+        self.reconstruction = gelfgat_poisson(data.flatten(), tmat, 50, h_friction=3)
+        
+        
+    def plot_reconstruction(self):
+        
+        if self.reconstruction is None:
+            raise ValueError("Run reconstruction first!")
+            
+        
+        xo = self.tmat.xo_scaled.to(u.um).value
+        yo = self.tmat.yo_scaled.to(u.um).value
+        img = self.reconstruction.solution
+        
+        
+        fig, ax = plt.subplots()
+        ax.pcolormesh(xo, yo, img.T)
+        ax.set_aspect('equal')
+        ax.set_xlabel("X (um)")
+        ax.set_ylabel("Y (um)")        
         
