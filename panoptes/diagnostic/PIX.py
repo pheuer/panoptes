@@ -87,6 +87,10 @@ class PIX(Diagnostic):
                 raise ValueError(f"File {self.path} data type {filetype} "
                                  "is not valid for class "
                                  f"{self.__class__.__name__}")
+                
+        else:
+            raise ValueError(f"Invalid number of arguments ({len(args)} for "
+                             f"class {self.__class__.__name__}.")
                     
     
         if pinhole_array is not None:

@@ -14,8 +14,8 @@ from panoptes.util.base import BaseObject
 
 from panoptes.util.misc import identify_filetype
 
-from cr39py.cr39 import CR39 as _CR39
-from cr39py.cr39 import Cut
+#from cr39py.cr39 import CR39 as _CR39
+#from cr39py.cr39 import Cut
 
 class CR39(BaseObject):
     
@@ -58,17 +58,17 @@ class CR39(BaseObject):
     def _load(self, grp):
         super()._load(grp)
         
-        if 'subsets' in grp.keys():
-            self.cr39 = _CR39(grp)
+        #if 'subsets' in grp.keys():
+        #    self.cr39 = _CR39(grp)
             
     def read_data(self, cli=False):
         """
         Reads data from a cpsa file
         """
-        self.cr39 = _CR39(self.path, verbose=True)
+        #self.cr39 = _CR39(self.path, verbose=True)
         
-        if cli:
-            self.cr39.cli()
+        #if cli:
+        #    self.cr39.cli()
 
   
         
@@ -82,14 +82,16 @@ if __name__ == "__main__":
     save_path = os.path.join(data_dir, '103955', 'cr39_test.h5' )
     
     #obj = CR39(data_path)
+    from panoptes.detector.cr39.scan import Scan
+    from panoptes.detector.cr39.cuts import Cut, Subset
     
-    obj = CR39(save_path)
-    obj.cr39.add_cut(Cut(cmin=30))
-    print(obj.cr39.current_subset)
-    obj.cr39.add_subset()
-    obj.cr39.select_subset(1)
-    obj.cr39.add_cut(Cut(dmin=20))
-    print(obj.cr39.current_subset)
+    obj = Scan(save_path)
+    obj.add_cut(Cut(cmin=30))
+    print(obj.current_subset)
+    obj.add_subset()
+    obj.select_subset(1)
+    obj.add_cut(Cut(dmin=20))
+    print(obj.current_subset)
     
     
     

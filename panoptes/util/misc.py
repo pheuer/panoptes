@@ -25,7 +25,7 @@ def identify_filetype(path):
             return identify_hdf_grp(f)
         
     elif ext.lower() in ['.cpsa']:
-        return 'cr39'
+        return 'cpsa'
     
     else:
         raise ValueError(f"Unrecognized file extension: {ext}")
