@@ -95,6 +95,14 @@ class KoDI(Diagnostic):
         # Note: we want a significantly higher resolution here than the frame
         # size, since we have combined images. Roughly we want N_ap*frame size
         
+        
+        
+        # TODO: Mabye re-do the way we do stacking? 
+        # Subtract the found center from each track position in the zone around
+        # that aperture, then join them all together in a list and make a 
+        # histogram from that. That way the bin size can be large for fitting
+        # but then much smaller for the reconstruction!
+        
         hax = self.scan.axes['X']
         print(hax.shape)
         hax = np.linspace(np.min(hax), np.max(hax), num=8*hax.size)
