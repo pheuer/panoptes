@@ -431,6 +431,21 @@ def _calc_tmat(arg):
     xa =  xi[:, np.newaxis] + xo[np.newaxis, :]*(mag-1)/mag
     ya =  yi[:, np.newaxis] + yo[np.newaxis, :]*(mag-1)/mag
     
+    
+    """
+    # Create vectors of offsets that cover the entire pixel in the
+    # aperture plane
+    # "pseudopixels"
+    # TODO: how to calculate xa here appropriately...
+    dxa = np.median(np.gradient(xa))
+    dya = np.median(np.gradient(xa))
+    xa_offset = np.linspace(-dxa/2, dxa/2, num=8)
+    ya_offset = np.linspace(-dya/2, dya/2, num=8)
+    # Add those offsets to the aperture positions in a new axis
+    xa = xa[:, :, np.newaxis] + xa_offset[np.newaxis, np.newaxis, :]
+    ya = ya[:, :, np.newaxis] + ya_offset[np.newaxis, np.newaxis, :]
+    """
+
     # Compute the distance from this point to every aperture
     r = np.sqrt(  (xa[..., np.newaxis] - ap_xy[:,0])**2 + 
                   (ya[..., np.newaxis] - ap_xy[:,1])**2
@@ -439,6 +454,11 @@ def _calc_tmat(arg):
     # Store the distance to the nearest aperture
     # NOTE: we are ignoring contributions from multiple pinholes
     res = np.min(r, axis=-1)
+    
+    """
+    # Average over the pseudopixels
+    res = np.mean(res, axis=-1)
+    """
     
     # Interpolate the value of the transfer matrix at this point
     # from the point spread function
