@@ -14,7 +14,7 @@ import h5py
 
 import matplotlib.pyplot as plt
 
-from panoptes.tmat.tmat import TransferMatrix
+from panoptes.reconstruction.tmat import TransferMatrix
 
 
 from scipy.optimize import  curve_fit
