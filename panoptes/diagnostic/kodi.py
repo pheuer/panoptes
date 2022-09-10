@@ -96,35 +96,33 @@ class KoDI(Diagnostic):
         # size, since we have combined images. Roughly we want N_ap*frame size
         
         
-        
-        # TODO: Mabye re-do the way we do stacking? 
-        # Subtract the found center from each track position in the zone around
-        # that aperture, then join them all together in a list and make a 
-        # histogram from that. That way the bin size can be large for fitting
-        # but then much smaller for the reconstruction!
+        # The way to handle that is to make new frames right before
+        # doing the stacking.
         
         hax = self.scan.axes['X']
-        print(hax.shape)
-        hax = np.linspace(np.min(hax), np.max(hax), num=8*hax.size)
-        print(hax.shape)
+        hax = np.linspace(np.min(hax), np.max(hax), num=2*hax.size)
         vax = self.scan.axes['Y']
-        vax = np.linspace(np.min(vax), np.max(vax), num=8*vax.size)
+        vax = np.linspace(np.min(vax), np.max(vax), num=2*vax.size)
         
         xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
 
-        dslice_data = PenumbralImageGelfgat(xaxis*u.cm, yaxis*u.cm, data,
+        obj = PenumbralImageGelfgat(xaxis*u.cm, yaxis*u.cm, data,
                                            pinhole_array=self.pinhole_array)
         
-        # Store this object in the subset's dslice list.
-        self.scan.current_subset.set_dslice_data(dslice_data)
-        
-        obj = self.scan.current_subset.current_dslice_data
-              
+    
         obj.fit_pinholes(**kwargs)
+
+        
+        hax = np.linspace(np.min(hax), np.max(hax), num=8*hax.size)
+        vax = np.linspace(np.min(vax), np.max(vax), num=8*vax.size)
+        xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
+        obj.xaxis = xaxis*u.cm
+        obj.yaxis = yaxis*u.cm
+        obj.data = data
+        
         
         obj.stack_pinholes()
-        
-        
+        # Store this object in the subset's dslice list.
         self.scan.current_subset.dslice_data[self.scan.current_subset.current_dslice_i] = obj
         
      
@@ -251,12 +249,11 @@ if __name__ == '__main__':
     
 
     #obj.save(save_path)
-    
-        
+
         
     obj.scan.current_subset.current_dslice_data.plot_stack()
     #if obj.scan.current_subset.current_dslice_data.tmat is None:
-    obj.calculate_tmat(tmat_path, mag=35.8)
+    obj.calculate_tmat(tmat_path)
         
         
     #if obj.scan.current_subset.current_dslice_data.reconstruction is None:
@@ -265,11 +262,11 @@ if __name__ == '__main__':
     
     
     obj.save(save_path)
-    """
+    
     x = obj.scan.current_subset.current_dslice_data
     
     x.reconstruction.iter_plot()
     x.plot_reconstruction()
     
-    """   
+
     
