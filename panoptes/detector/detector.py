@@ -421,12 +421,15 @@ class PinholeArrayImage(Data2D):
        self.plot_stack()
        
        
-    def plot_stack(self):
+    def plot_stack(self, show=True):
         
         fig, ax = plt.subplots()
         ax.set_aspect('equal')
         ax.pcolormesh(self.stack.xaxis.to(u.cm).value, 
-                      self.stack.yaxis.to(u.cm).value, self.stack.data.T)    
+                      self.stack.yaxis.to(u.cm).value, self.stack.data.T)   
+        
+        if show:
+            plt.show()
         
         
     def plot_pinholes(self, *args):
@@ -498,7 +501,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
             
             
         if xyo is None:
-            xlim = 100
+            xlim = 200
             xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
             yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
         else:

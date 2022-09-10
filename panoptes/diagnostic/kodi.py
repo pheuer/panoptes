@@ -85,8 +85,24 @@ class KoDI(Diagnostic):
         self.scan.apply_cuts()
         
         # Create a PenumbralImageGelfgat object using the data from
-        # the current subset and dslices
-        xaxis, yaxis, data = self.scan.frames()
+        # the current subset and 
+        
+        
+        # TODO: intelligently choose the bin size if not specified by 
+        # repeatedly making frames and looking at the median number in
+        # each bin?
+        
+        # Note: we want a significantly higher resolution here than the frame
+        # size, since we have combined images. Roughly we want N_ap*frame size
+        
+        hax = self.scan.axes['X']
+        print(hax.shape)
+        hax = np.linspace(np.min(hax), np.max(hax), num=8*hax.size)
+        print(hax.shape)
+        vax = self.scan.axes['Y']
+        vax = np.linspace(np.min(vax), np.max(vax), num=8*vax.size)
+        
+        xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
 
         dslice_data = PenumbralImageGelfgat(xaxis*u.cm, yaxis*u.cm, data,
                                            pinhole_array=self.pinhole_array)
@@ -107,7 +123,7 @@ class KoDI(Diagnostic):
     def calculate_tmat(self, tmat_path, mag=None):
         obj = self.scan.current_subset.current_dslice_data
         
-        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(81, 81),
+        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(31, 31),
                       mag = mag)
         
 
@@ -188,7 +204,7 @@ if __name__ == '__main__':
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
     #data_dir = os.path.join('//expdiv','kodi','ShotData')
     #data_dir = os.path.join('\\\profiles','Users$','pheu','Desktop','data_dir')
-    data_dir = os.path.join("C:\\","Users","pheu","Data","data_dir")
+    #data_dir = os.path.join("C:\\","Users","pheu","Data","data_dir")
     
     data_path = os.path.join(data_dir, '103955', '103955_TIM5_PR3148_2h_s7_20x.cpsa')
     save_path = os.path.join(data_dir, '103955', 'kodi_test.h5')
@@ -220,7 +236,7 @@ if __name__ == '__main__':
         
     obj.scan.select_subset(0)
         
-        
+     
     #if obj.scan.current_subset.current_dslice_data is None:           
     obj.process( auto_select_apertures=True, 
                 rough_adjust={'dx':-0.3, 'dy':-0.1, 'mag_s':36, 'rot':18},)
@@ -241,3 +257,11 @@ if __name__ == '__main__':
     
     
     obj.save(save_path)
+    """
+    x = obj.scan.current_subset.current_dslice_data
+    
+    x.reconstruction.iter_plot()
+    x.plot_reconstruction()
+    
+    """   
+    
