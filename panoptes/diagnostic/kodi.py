@@ -113,8 +113,8 @@ class KoDI(Diagnostic):
         obj.fit_pinholes(**kwargs)
 
         
-        hax = np.linspace(np.min(hax), np.max(hax), num=6*hax.size)
-        vax = np.linspace(np.min(vax), np.max(vax), num=6*vax.size)
+        hax = np.linspace(np.min(hax), np.max(hax), num=3*hax.size)
+        vax = np.linspace(np.min(vax), np.max(vax), num=3*vax.size)
         xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
         obj.xaxis = xaxis*u.cm
         obj.yaxis = yaxis*u.cm
