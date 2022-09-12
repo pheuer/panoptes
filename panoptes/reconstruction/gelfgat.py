@@ -39,7 +39,50 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
     # Initial guess is uniform
     # Add one pixel to the object plane for the background pixel
     Bnew = np.ones(tmat.osize+1)
+    
+    # Create a Gaussian image guess
+    x, y = np.meshgrid(tmat.xo, tmat.yo, indexing='ij')
+    r= np.sqrt(x**2 + y**2)
+    rscale = np.max(r)
+    
+    gaussian = np.exp(-r**2/2/(0.3*rscale)**2)
+    #gaussian = rscale - r
+
+    gaussian = gaussian/np.max(gaussian) + 0.01
+    
+    # Try discritizing 
+    # gaussian = (gaussian*10 + 1).astype(int).astype(float)
+
+    
+    
+    gdof = np.sum(gaussian / (gaussian + 1/gaussian.size))
+    print(f"DOF of prior: {gdof}")
+    
+    
+   
+    
+    
+    
+    fig, ax = plt.subplots()
+    ax.set_title('Gaussian kernel')
+    ax.set_aspect('equal')
+    ax.pcolormesh(tmat.xo, tmat.yo, gaussian.T)
+    plt.show()
+    
+    fig, ax = plt.subplots()
+    ax.plot(tmat.xo, gaussian[:, int(tmat.nyo/2) ])
+    plt.show()
+    
+    
+
+
+    Bnew[:-1] = gaussian.flatten()    
+    Bnew[-1] = np.min(gaussian)
+    
+    
     Bnew = Bnew/np.sum(Bnew) # Normalize Bnew
+    
+    print(f"BGuess ratio: {np.max(Bnew[:-1])/np.min(Bnew[:-1])}")
 
     # Normalize the transfer matrix to the image plane, not including any
     # zero values
@@ -249,13 +292,14 @@ class GelfgatResult(BaseObject):
         
         termination_condition = chi2.cdf(likelihood_ratio, self.DOF_asymptotic)
         
-        return termination_condition
+        return  termination_condition
         
     @cached_property
     def termination_ind(self):
         """
         Calculates the termination index
         """
+
         
         return np.argmin(np.abs(self.termination_condition - 0.5))
     
@@ -281,7 +325,8 @@ class GelfgatResult(BaseObject):
         ax3.set_ylabel("Termination condition")
         ax3.spines.right.set_position(("axes", 1.3))
         
-        
+        print(self.termination_ind)
+        print(self.termination_condition)
         ax.axvline(self.termination_ind, color='red', linestyle='--', label='Solution')
         
         ax.legend(loc='center right')

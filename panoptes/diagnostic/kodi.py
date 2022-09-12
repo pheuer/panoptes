@@ -121,7 +121,7 @@ class KoDI(Diagnostic):
         obj.data = data
         
         
-        obj.stack_pinholes(width=1.4)
+        obj.stack_pinholes(width=1.2)
         # Store this object in the subset's dslice list.
         self.scan.current_subset.dslice_data[self.scan.current_subset.current_dslice_i] = obj
         
@@ -136,7 +136,7 @@ class KoDI(Diagnostic):
     def reconstruct(self, tmat_path):
         
         obj = self.scan.current_subset.current_dslice_data
-        obj.reconstruct(tmat_path)
+        obj.reconstruct(tmat_path, 50)
         
         obj.reconstruction.iter_plot()
         obj.plot_reconstruction()
@@ -238,32 +238,27 @@ if __name__ == '__main__':
                 rough_adjust={'dx':-0.3, 'dy':-0.1, 'mag_s':36, 'rot':18},
     """
      
-    #if obj.scan.current_subset.current_dslice_data is None:           
-    obj.process( rough_adjust={'dx':0.2, 'dy':0.35, 'mag_s':20, 'rot':0},)
+    if obj.scan.current_subset.current_dslice_data is None:           
+        obj.process( rough_adjust={'dx':0.2, 'dy':0.35, 'mag_s':20, 'rot':0},)
     
 
-    #obj.save(save_path)
+        obj.save(save_path)
 
         
     obj.scan.current_subset.current_dslice_data.plot_stack()
-    #if obj.scan.current_subset.current_dslice_data.tmat is None:
-    obj.calculate_tmat(tmat_path)
+    if obj.scan.current_subset.current_dslice_data.tmat is None:
+        obj.calculate_tmat(tmat_path)
         
         
     #if obj.scan.current_subset.current_dslice_data.reconstruction is None:
-    obj.reconstruct(tmat_path)
-    
-    
-    
-    obj.save(save_path)
-    
-    
-    
-    """
-    x = obj.scan.current_subset.current_dslice_data
-    
-    x.reconstruction.iter_plot()
-    x.plot_reconstruction()
-    """
+    if True:
+        obj.reconstruct(tmat_path)
+        obj.save(save_path)
+    else:
+            
+        x = obj.scan.current_subset.current_dslice_data
+        
+        x.reconstruction.iter_plot()
+        x.plot_reconstruction()
 
     
