@@ -246,8 +246,7 @@ class PinholeArray(BaseObject):
             
         grp['xy'] = self.xy
         grp['xy'].attrs['unit'] = 'cm'
-        grp['use_for_fit'] = self.use_for_fit
-        grp['use_for_stack'] = self.use_for_stack
+        grp['use'] = self.use
         grp['pinhole_centers'] = self.pinhole_centers
         grp['pinhole_centers'].attrs['unit'] = 'cm'
         
@@ -276,8 +275,7 @@ class PinholeArray(BaseObject):
             self.adjustment[key] = adjustment_grp[key][...]
             
         self.xy = grp['xy'][...] 
-        self.use_for_fit = grp['use_for_fit'][...]
-        self.use_for_stack = grp['use_for_stack'][...]
+        self.use = grp['use'][...]
         self.pinhole_centers = grp['pinhole_centers'][...]
          
          
@@ -311,10 +309,8 @@ class PinholeArray(BaseObject):
         self.xy_prime = np.copy(self.xy) 
         
         # Indices of pinholes to use for fitting the array model
-        self.use_for_fit = np.ones(self.npinholes).astype(bool)
-        # Indices of pinholes to stack
-        self.use_for_stack = np.ones(self.npinholes).astype(bool)
-        
+        self.use = np.ones(self.npinholes).astype(bool)
+
         # The locations of the pinhole centers
         # (determined by fitting each aperture image)
         self.pinhole_centers = self.xy
@@ -413,7 +409,7 @@ class PinholeArray(BaseObject):
         
         # Select pinholes to include in the remainder of the analysis
         if use_apertures is not None:
-            self.use_for_fit = np.array(use_apertures)
+            self.use = np.array(use_apertures)
         else:
             
             # TODO: this diameter calculation won't work as well for pinhole images
@@ -423,15 +419,13 @@ class PinholeArray(BaseObject):
             
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
-            border = 0.2 # cm
+            border = 0.3 # cm
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
-                                                   variable='fit',
                                                    border=border)
             else:
                 self._manual_select_apertures(xaxis, yaxis, data,
-                                                     variable='fit',
                                                      border=border)
     
         
@@ -506,7 +500,7 @@ class PinholeArray(BaseObject):
         
         
         
-    def _auto_select_apertures(self, xaxis, yaxis, data, variable='fit', 
+    def _auto_select_apertures(self, xaxis, yaxis, data, 
                                border = 0):
         """
         Automatically select apertures to include in the fit.
@@ -520,13 +514,6 @@ class PinholeArray(BaseObject):
         xaxis, yaxis, data : np.ndarray
             Data and axes
             
-            
-        variable : str 
-            Changes which list of apertures is changed. 
-            
-            - 'fit' : the list of apertures used to fit the array
-            - 'stack' : the list of apertures to stack
-        
         
         border : float
             Ignore apertures within this distance (in axis units) of the
@@ -534,28 +521,21 @@ class PinholeArray(BaseObject):
             of the current image.
         
         """
-        if variable == 'fit':
-            use = self.use_for_fit
-        elif variable == 'stack':
-            use = self.use_for_stack
+
 
         # Auto-exclude apertures that are not within the current bounds
-        use = (use *
+        self.use = (self.use *
                 (self.xy[:,0] > np.min(xaxis) + border ) *
                 (self.xy[:,0] < np.max(xaxis) - border ) *
                 (self.xy[:,1] > np.min(yaxis) + border ) *
                 (self.xy[:,1] < np.max(yaxis) - border)
                ).astype(bool)
         
-        if variable == 'fit':
-            self.use_for_fit = use
-        elif variable == 'stack':
-            self.use_for_stack = use
+
         
         
         
     def _manual_select_apertures(self, xaxis, yaxis, data,
-                                 variable='fit',
                                  border = 0):
         """
         Take user input to select apertures to include or exclude in the fit
@@ -587,16 +567,10 @@ class PinholeArray(BaseObject):
         
         
         # run auto-select to at least get an intelligently chosen baseline
-        self._auto_select_apertures(xaxis, yaxis, data, variable=variable,
+        self._auto_select_apertures(xaxis, yaxis, data, 
                                            border=border)
         
-        
-        if variable == 'fit':
-            use = self.use_for_fit
-        elif variable == 'stack':
-            use = self.use_for_stack
-        
-        
+
         # Switch to qt plotting for interactive plots
         get_ipython().run_line_magic('matplotlib', 'qt')
         
@@ -616,14 +590,10 @@ class PinholeArray(BaseObject):
 
                 # Switch the value in the 'pinholes_use' array
                 ind = np.argmin(dist)
-                print(ind)
-                use[ind] = ~use[ind] 
+
+                self.use[ind] = ~self.use[ind] 
                 
-            if variable == 'fit':
-                self.use_for_fit = use
-            elif variable == 'stack':
-                self.use_for_stack = use
-            
+
             fig, ax = fig, ax = self.plot_with_data(xaxis, yaxis, 
                                                     data, fig, ax)
             
@@ -668,7 +638,7 @@ class PinholeArray(BaseObject):
         radius = self.diameter/2
         
         
-        use_ind = [i for i,v in enumerate(self.use_for_fit) if v==1]
+        use_ind = [i for i,v in enumerate(self.use) if v==1]
         
         # Save the center coordinates and magnification from each fit
         pinhole_centers = []
@@ -696,7 +666,7 @@ class PinholeArray(BaseObject):
             # auto-detect if either array is zero length and skip this 
             # array if so
             if x.size ==0 or y.size == 0:
-                self.use_for_fit[ind] = False
+                self.use[ind] = False
                 continue
             
 
@@ -812,7 +782,7 @@ class PinholeArray(BaseObject):
                              "apertures need to be fit first.")
         
         # Nominal locations for the pinholes being fit
-        xy_nom = self.xy_prime[self.use_for_fit,:]
+        xy_nom = self.xy_prime[self.use,:]
         
         # Fit the centers found with the pinhole array model
         print("Fitting pinhole array model to points")
@@ -861,9 +831,9 @@ class PinholeArray(BaseObject):
                              vreflect=p[7])
         
         
-        error = np.sqrt( (self.xy[self.use_for_fit, 0]- 
+        error = np.sqrt( (self.xy[self.use, 0]- 
                           self.pinhole_centers[:,0])**2 +
-                                (self.xy[self.use_for_fit, 1]- 
+                                (self.xy[self.use, 1]- 
                                  self.pinhole_centers[:,1])**2 )
         
         print(f"Pinhole fit max error: {np.max(error)*1e4:.2} um")
@@ -874,8 +844,7 @@ class PinholeArray(BaseObject):
         
 
         
-    def stack(self, xaxis, yaxis, data, width=None, use_apertures=None,
-              auto_select_apertures=True):
+    def stack(self, xaxis, yaxis, data, width=None):
         """
         Stack the data from the selected pinholes
         
@@ -886,10 +855,7 @@ class PinholeArray(BaseObject):
             The width and height of the stacked image
         
         
-        use_apertures : bool array [napertures,], optional
-            A boolean list or array indicating which apertures to include
-            in the fit. If False (default) apertures will be selected
-            automatically or with user input.
+      
             
         auto_select_apertures : bool, optional
             If True, automatically select the apertures for the fit and skip
@@ -897,35 +863,18 @@ class PinholeArray(BaseObject):
         
         """
         
+        
+        # TODO: allow 'stack' to select a subset of the fit apertures
+        # to stack. 
+        # Cannot include apertures outside of this, because we need the
+        # pinhole centers to do the stacking!
+        
+        
         if self.pinhole_centers is None:
             raise ValueError("pinhole_centers not defined. Individual "
                              "apertures need to be fit first.")
             
-            
-        # Select pinholes to include in the remainder of the analysis
-        if use_apertures is not None:
-            self.use_for_stack = np.array(use_apertures)
-        else:
-            
-            # TODO: this diameter calculation won't work as well for pinhole images
-            # where the image is not the same size as the projected aperture. 
-            # Add a tuning parameter for the size here for that? Or 
-            # somehow extract that first? 
-            
-            # Compute the distance from the edge of the domain that an aperture needs
-            # to be to be auto-selected
-            border = 0.3 # cm
-            
-            if auto_select_apertures:
-                self._auto_select_apertures(xaxis, yaxis, data, 
-                                                   variable='stack',
-                                                   border=border)
-            else:
-                self._manual_select_apertures(xaxis, yaxis, data,
-                                                     variable='stack',
-                                                     border=border)
-            
-            
+
         if width is None:
             width = 2*(self.mag_r*self.diameter)
             
@@ -938,11 +887,7 @@ class PinholeArray(BaseObject):
         wy = int(width/2/dy)
     
         # Indices of the apetures to include
-        use_ind = [i for i,v in enumerate(self.use_for_stack) if v==1]
-        
-        # TODO: Enforce that use_for_stack must be a subset of
-        # use_for_fit: otherwise the pinhole centers are not defined...
-        # maybe just make them the same again?
+        use_ind = [i for i,v in enumerate(self.use) if v==1]
         
         
     
@@ -1020,11 +965,11 @@ class PinholeArray(BaseObject):
 
         if self.xy is not None:
             print('plotting')
-            ax.scatter(self.xy[self.use_for_fit,0], 
-                       self.xy[self.use_for_fit,1], color='green')
+            ax.scatter(self.xy[self.use,0], 
+                       self.xy[self.use,1], color='green')
             
-            ax.scatter(self.xy[~self.use_for_fit,0], 
-                       self.xy[~self.use_for_fit,1], color='red')
+            ax.scatter(self.xy[~self.use,0], 
+                       self.xy[~self.use,1], color='red')
             
             
         if self.mag_r is not None:

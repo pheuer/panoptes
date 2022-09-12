@@ -501,7 +501,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
             
             
         if xyo is None:
-            xlim = 200
+            xlim = 100
             xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
             yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
         else:
