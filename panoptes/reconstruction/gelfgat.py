@@ -40,6 +40,9 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
     # Add one pixel to the object plane for the background pixel
     Bnew = np.ones(tmat.osize+1)
     
+    
+    
+    """
     # Create a Gaussian image guess
     x, y = np.meshgrid(tmat.xo, tmat.yo, indexing='ij')
     r= np.sqrt(x**2 + y**2)
@@ -57,12 +60,7 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
     
     gdof = np.sum(gaussian / (gaussian + 1/gaussian.size))
     print(f"DOF of prior: {gdof}")
-    
-    
-   
-    
-    
-    
+
     fig, ax = plt.subplots()
     ax.set_title('Gaussian kernel')
     ax.set_aspect('equal')
@@ -73,16 +71,17 @@ def gelfgat_poisson(P, tmat, niter, h_friction=3):
     ax.plot(tmat.xo, gaussian[:, int(tmat.nyo/2) ])
     plt.show()
     
-    
+    print(f"BGuess ratio: {np.max(Bnew[:-1])/np.min(Bnew[:-1])}")
 
 
     Bnew[:-1] = gaussian.flatten()    
     Bnew[-1] = np.min(gaussian)
+    """
     
     
     Bnew = Bnew/np.sum(Bnew) # Normalize Bnew
     
-    print(f"BGuess ratio: {np.max(Bnew[:-1])/np.min(Bnew[:-1])}")
+    
 
     # Normalize the transfer matrix to the image plane, not including any
     # zero values
