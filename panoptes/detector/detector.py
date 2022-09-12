@@ -557,7 +557,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
         c=1
         data = self.stack.data[::c, ::c] 
         
-        self.reconstruction = gelfgat_poisson(data.flatten(), tmat, 50, h_friction=3)
+        self.reconstruction = gelfgat_poisson(data.flatten(), tmat, 100, h_friction=3)
         
         
     def plot_reconstruction(self):

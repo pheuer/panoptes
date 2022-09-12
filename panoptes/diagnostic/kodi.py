@@ -100,9 +100,9 @@ class KoDI(Diagnostic):
         # doing the stacking.
         
         hax = self.scan.axes['X']
-        hax = np.linspace(np.min(hax), np.max(hax), num=2*hax.size)
+        hax = np.linspace(np.min(hax), np.max(hax), num=hax.size)
         vax = self.scan.axes['Y']
-        vax = np.linspace(np.min(vax), np.max(vax), num=2*vax.size)
+        vax = np.linspace(np.min(vax), np.max(vax), num=vax.size)
         
         xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
 
@@ -113,8 +113,8 @@ class KoDI(Diagnostic):
         obj.fit_pinholes(**kwargs)
 
         
-        hax = np.linspace(np.min(hax), np.max(hax), num=8*hax.size)
-        vax = np.linspace(np.min(vax), np.max(vax), num=8*vax.size)
+        hax = np.linspace(np.min(hax), np.max(hax), num=2*hax.size)
+        vax = np.linspace(np.min(vax), np.max(vax), num=2*vax.size)
         xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
         obj.xaxis = xaxis*u.cm
         obj.yaxis = yaxis*u.cm
@@ -129,7 +129,7 @@ class KoDI(Diagnostic):
     def calculate_tmat(self, tmat_path, mag=None):
         obj = self.scan.current_subset.current_dslice_data
         
-        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(31, 31),
+        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(61, 61),
                       mag = mag)
         
 
@@ -207,15 +207,14 @@ class KoDI(Diagnostic):
             
 if __name__ == '__main__':
     
-    data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
+    data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir", '102568')
     #data_dir = os.path.join('//expdiv','kodi','ShotData')
     #data_dir = os.path.join('\\\profiles','Users$','pheu','Desktop','data_dir')
     #data_dir = os.path.join("C:\\","Users","pheu","Data","data_dir")
     
-    data_path = os.path.join(data_dir, '103955', '103955_TIM5_PR3148_2h_s7_20x.cpsa')
-    save_path = os.path.join(data_dir, '103955', 'kodi_test.h5')
-    
-    tmat_path = os.path.join(data_dir, '103955', 'tmat_kodi.h5')
+    data_path = os.path.join(data_dir, '102568_TIM2_PR2927_s8.cpsa')
+    save_path = os.path.join(data_dir, 'kodi_test.h5')
+    tmat_path = os.path.join(data_dir, 'tmat_kodi.h5')
     
     
     if not os.path.isfile(save_path):
@@ -226,26 +225,21 @@ if __name__ == '__main__':
         obj.scan.add_cut(Cut(dmin=12))
         obj.scan.cutplot()
         
-        # Create a new subset and select it
-        obj.scan.add_subset()
-        obj.scan.select_subset(1)
-        # Create cuts on the new subset
-        obj.scan.add_cut(Cut(cmin=25))
-        obj.scan.add_cut(Cut(dmin=15))
-        obj.scan.cutplot()
-        obj.scan.current_subset.set_ndslices(4)
-        
-        obj.save(save_path)
+
     else:
         obj = KoDI(save_path)
         
         
     obj.scan.select_subset(0)
         
+    
+    """
+    auto_select_apertures=True, 
+                rough_adjust={'dx':-0.3, 'dy':-0.1, 'mag_s':36, 'rot':18},
+    """
      
     #if obj.scan.current_subset.current_dslice_data is None:           
-    obj.process( auto_select_apertures=True, 
-                rough_adjust={'dx':-0.3, 'dy':-0.1, 'mag_s':36, 'rot':18},)
+    obj.process( rough_adjust={'dx':0.2, 'dy':0.35, 'mag_s':20, 'rot':0},)
     
 
     #obj.save(save_path)
@@ -263,10 +257,13 @@ if __name__ == '__main__':
     
     obj.save(save_path)
     
+    
+    
+    """
     x = obj.scan.current_subset.current_dslice_data
     
     x.reconstruction.iter_plot()
     x.plot_reconstruction()
-    
+    """
 
     

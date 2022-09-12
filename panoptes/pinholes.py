@@ -423,7 +423,7 @@ class PinholeArray(BaseObject):
             
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
-            border = -0.25 # cm
+            border = 0.2 # cm
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
@@ -583,15 +583,18 @@ class PinholeArray(BaseObject):
 
         """
         
-        if variable == 'fit':
-            use = self.use_for_fit
-        elif variable == 'stack':
-            use = self.use_for_stack
+        
         
         
         # run auto-select to at least get an intelligently chosen baseline
         self._auto_select_apertures(xaxis, yaxis, data, variable=variable,
                                            border=border)
+        
+        
+        if variable == 'fit':
+            use = self.use_for_fit
+        elif variable == 'stack':
+            use = self.use_for_stack
         
         
         # Switch to qt plotting for interactive plots
@@ -613,24 +616,29 @@ class PinholeArray(BaseObject):
 
                 # Switch the value in the 'pinholes_use' array
                 ind = np.argmin(dist)
+                print(ind)
                 use[ind] = ~use[ind] 
-                fig, ax = fig, ax = self.plot_with_data(xaxis, yaxis, 
-                                                        data, fig, ax)
+                
+            if variable == 'fit':
+                self.use_for_fit = use
+            elif variable == 'stack':
+                self.use_for_stack = use
+            
+            fig, ax = fig, ax = self.plot_with_data(xaxis, yaxis, 
+                                                    data, fig, ax)
             
             if len(cor) == 0:
                 break
             
         print("Finished selecting apertures")
         
-        if variable == 'fit':
-            self.use_for_fit = use
-        elif variable == 'stack':
-            self.use_for_stack = use
+        
     
         # Switch back to inline plotting so as to not disturb the console 
         # plots
         if get_ipython() is not None:
             get_ipython().run_line_magic('matplotlib', 'inline')
+            
 
 
     def _fit_penumbra(self, xaxis, yaxis, data, plots=True):
@@ -663,27 +671,35 @@ class PinholeArray(BaseObject):
         use_ind = [i for i,v in enumerate(self.use_for_fit) if v==1]
         
         # Save the center coordinates and magnification from each fit
-        self.pinhole_centers = np.zeros([len(use_ind),2])
-        mag_r = np.zeros([len(use_ind)])
+        pinhole_centers = []
+        mag_r = []
         
         
 
         for i, ind in enumerate(use_ind):
             print(f"Fitting aperture {i+1}/{len(use_ind)} (# {ind})")
         
-          
+        
             # Find the indices that bound the subregion around this aperture
             xa = np.argmin(np.abs(xaxis - (self.xy[ind,0] - width)))
             xb = np.argmin(np.abs(xaxis - (self.xy[ind,0] + width)))
             ya = np.argmin(np.abs(yaxis - (self.xy[ind,1] - width)))
             yb = np.argmin(np.abs(yaxis - (self.xy[ind,1] + width)))
-
-                    
+            
+            #print(f"{xa}:{xb}, {ya}:{yb}")
+            
             # Cut out the subregion, make an array of axes for the points
             arr = data[xa:xb, ya:yb]
             x = xaxis[xa:xb]
             y = yaxis[ya:yb]
             
+            # auto-detect if either array is zero length and skip this 
+            # array if so
+            if x.size ==0 or y.size == 0:
+                self.use_for_fit[ind] = False
+                continue
+            
+
             axes = np.meshgrid(x, y, indexing='ij')
             
             
@@ -748,9 +764,8 @@ class PinholeArray(BaseObject):
             #p = fmin(model, p, disp=False)
             
             # xc, yc, mag_r
-            self.pinhole_centers[i,0] = p[1]
-            self.pinhole_centers[i,1] = p[2]
-            mag_r[i] = p[3]
+            pinhole_centers.append([ p[1], p[2]])
+            mag_r.append(p[3])
             
             if plots:
                 fig, ax = plt.subplots()
@@ -769,6 +784,11 @@ class PinholeArray(BaseObject):
                 ax.legend()
                 plt.show()
             
+        
+        self.pinhole_centers = np.array(pinhole_centers)
+        print(self.pinhole_centers.shape)
+            
+        mag_r = np.array(mag_r)
         self.mag_r = float(np.mean(mag_r))
         
 
@@ -894,7 +914,7 @@ class PinholeArray(BaseObject):
             
             # Compute the distance from the edge of the domain that an aperture needs
             # to be to be auto-selected
-            border = -0.25 # cm
+            border = 0.3 # cm
             
             if auto_select_apertures:
                 self._auto_select_apertures(xaxis, yaxis, data, 
@@ -920,6 +940,9 @@ class PinholeArray(BaseObject):
         # Indices of the apetures to include
         use_ind = [i for i,v in enumerate(self.use_for_stack) if v==1]
         
+        # TODO: Enforce that use_for_stack must be a subset of
+        # use_for_fit: otherwise the pinhole centers are not defined...
+        # maybe just make them the same again?
         
         
     
@@ -950,9 +973,9 @@ class PinholeArray(BaseObject):
             y0 = np.argmin(np.abs(yaxis - (self.pinhole_centers[i,1])))
 
             data_subset = data[x0-wx:x0+wx, y0-wy:y0+wy]
-
             output[...,i] = data_subset
-            
+
+
         output = np.nanmean(output, axis=-1)
 
         # Calculate new x and y axes centered on this image
@@ -986,7 +1009,7 @@ class PinholeArray(BaseObject):
         
         ax.set_aspect('equal')
         ax.pcolormesh(xaxis, yaxis,
-                      data.T, vmax=10*np.median(data))
+                      data.T, vmax=10*np.median(data), cmap='plasma')
         
         ax.set_xlabel("X (cm)")
         ax.set_ylabel("Y (cm)")
@@ -996,6 +1019,7 @@ class PinholeArray(BaseObject):
         
 
         if self.xy is not None:
+            print('plotting')
             ax.scatter(self.xy[self.use_for_fit,0], 
                        self.xy[self.use_for_fit,1], color='green')
             
