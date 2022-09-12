@@ -412,10 +412,10 @@ class PinholeArrayImage(Data2D):
                           *args, **kwargs)
         
         
-    def stack_pinholes(self):
+    def stack_pinholes(self, **kwargs):
        sx, sy, stack =  self.pinholes.stack(self.xaxis.to(u.cm).value,
                                             self.yaxis.to(u.cm).value, 
-                                            self.data)
+                                            self.data, **kwargs)
        
        self.stack = Data2D(sx*u.cm, sy*u.cm, stack)
        self.plot_stack()

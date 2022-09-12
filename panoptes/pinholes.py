@@ -877,7 +877,9 @@ class PinholeArray(BaseObject):
 
         if width is None:
             width = 2*(self.mag_r*self.diameter)
+          
             
+        print(f"Width stack: {width}")
         
             
         # Calculate the half-width in pixels

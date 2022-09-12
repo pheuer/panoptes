@@ -121,7 +121,7 @@ class KoDI(Diagnostic):
         obj.data = data
         
         
-        obj.stack_pinholes()
+        obj.stack_pinholes(width=1.4)
         # Store this object in the subset's dslice list.
         self.scan.current_subset.dslice_data[self.scan.current_subset.current_dslice_i] = obj
         
