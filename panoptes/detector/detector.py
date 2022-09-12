@@ -501,7 +501,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
             
             
         if xyo is None:
-            xlim = 100
+            xlim = 150
             xo = np.linspace(-xlim, xlim, num=oshape[0]) * u.um / R_ap
             yo = np.linspace(-xlim, xlim, num=oshape[1]) * u.um / R_ap
         else:
@@ -577,7 +577,7 @@ class PenumbralImageGelfgat(PinholeArrayImage):
                           int(0.33*ny):int(0.66*ny),])
         
         fig, ax = plt.subplots()
-        ax.pcolormesh(xo, yo, img.T, vmax=vmax)
+        ax.pcolormesh(xo, yo, img.T, )# vmax=vmax)
         ax.set_aspect('equal')
         ax.set_xlabel("X (um)")
         ax.set_ylabel("Y (um)")        

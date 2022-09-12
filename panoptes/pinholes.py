@@ -924,10 +924,32 @@ class PinholeArray(BaseObject):
 
 
         output = np.nanmean(output, axis=-1)
-
+        
         # Calculate new x and y axes centered on this image
         xaxis = np.linspace(-width/2, width/2, 2*wx)
         yaxis = np.linspace(-width/2, width/2, 2*wy)
+        
+        
+        
+        
+        # TODO: Add keywords for the cutoff radius (default determine from the
+        # pinhole radius) and the pad factor.
+        # but this seems to work!
+        r = np.sqrt(xaxis**2 + yaxis**2)
+        noise = output[r > 0.5].flatten()
+        
+        
+        expfact = 2
+        out2 = np.random.choice(noise, replace=True, size=expfact**2*4*wx*wy)
+        out2 = np.reshape(out2, (expfact*2*wx, expfact*2*wy))
+        
+        out2[(expfact-1)*wx:(expfact+1)*wx, 
+             (expfact-1)*wy:(expfact+1)*wy] = output
+        output = out2
+        
+        xaxis = np.linspace(-expfact*width/2, expfact*width/2, expfact*2*wx)
+        yaxis = np.linspace(-expfact*width/2, expfact*width/2, expfact*2*wy)
+
         
         return xaxis, yaxis, output
         
