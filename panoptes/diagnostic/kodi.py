@@ -29,7 +29,7 @@ if get_ipython() is not None:
 from panoptes.detector.cr39.scan import Scan
 from panoptes.detector.cr39.cuts import Cut, Subset
 from panoptes.util.misc import identify_filetype
-from panoptes.detector.detector import Data2D, PenumbralImageGelfgat
+from panoptes.detector.detector import Data2D, PenumbralImage
 
 from panoptes.diagnostic.diagnostic import Diagnostic
 
@@ -106,7 +106,7 @@ class KoDI(Diagnostic):
         
         xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
 
-        obj = PenumbralImageGelfgat(xaxis*u.cm, yaxis*u.cm, data,
+        obj = PenumbralImage(xaxis*u.cm, yaxis*u.cm, data,
                                            pinhole_array=self.pinhole_array)
         
     
@@ -197,7 +197,7 @@ class KoDI(Diagnostic):
                 # PenumbralImageGelfgat object
                 if len(list(dslice_grp.keys())) != 0:
                     
-                    obj = PenumbralImageGelfgat(dslice_grp)
+                    obj = PenumbralImage(dslice_grp)
                     self.scan.current_subset.dslice_data[j] = obj
         
 

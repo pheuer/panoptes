@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 
 from panoptes.diagnostic.diagnostic import Diagnostic
-from panoptes.detector.detector import PenumbralImageGelfgat
+from panoptes.detector.detector import PenumbralImage
 from panoptes.detector.xray import XrayIP
 from panoptes.util.misc import identify_filetype
 
@@ -42,7 +42,7 @@ class PIX(Diagnostic):
         self.data = None
      
         if len(args)==0:
-            self.data = PenumbralImageGelfgat(pinhole_array)
+            self.data = PenumbralImage(pinhole_array)
         
         # If a single argument is given, assume it is the filepath to either
         # a saved PIX object or an x-ray datafile
@@ -62,13 +62,13 @@ class PIX(Diagnostic):
                 
             elif filetype == 'XrayIP' or filetype == 'OMEGA IP':
                 xrayip = XrayIP(self.path)
-                self.data = PenumbralImageGelfgat(xrayip.xaxis, xrayip.yaxis, 
+                self.data = PenumbralImage(xrayip.xaxis, xrayip.yaxis, 
                                               xrayip.data, 
                                               pinhole_array=pinhole_array)
                 
                     
             elif filetype == 'PenumbralImageGelfgat':
-               self.data = PenumbralImageGelfgat(self.path)
+               self.data = PenumbralImage(self.path)
                
                     
             else:
@@ -89,7 +89,7 @@ class PIX(Diagnostic):
     def _load(self, grp):
         super()._load(grp)
         if 'data' in grp.keys():
-            self.data = PenumbralImageGelfgat(grp)
+            self.data = PenumbralImage(grp)
         
         
     def plot_pinholes(self):

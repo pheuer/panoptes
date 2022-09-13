@@ -454,7 +454,7 @@ class PinholeArrayImage(Data2D):
     
     
     
-class PenumbralImageGelfgat(PinholeArrayImage):
+class PenumbralImage(PinholeArrayImage):
     
     def __init__(self, *args, **kwargs):
         
