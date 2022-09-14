@@ -113,8 +113,8 @@ class KoDI(Diagnostic):
         obj.fit_pinholes(**kwargs)
 
         
-        hax = np.linspace(np.min(hax), np.max(hax), num=6*hax.size)
-        vax = np.linspace(np.min(vax), np.max(vax), num=6*vax.size)
+        hax = np.linspace(np.min(hax), np.max(hax), num=3*hax.size)
+        vax = np.linspace(np.min(vax), np.max(vax), num=3*vax.size)
         xaxis, yaxis, data = self.scan.frames(hax=hax, vax=vax)
         obj.xaxis = xaxis*u.cm
         obj.yaxis = yaxis*u.cm
@@ -129,7 +129,7 @@ class KoDI(Diagnostic):
     def calculate_tmat(self, tmat_path, mag=None):
         obj = self.scan.current_subset.current_dslice_data
         
-        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(61, 61),
+        obj.make_tmat(tmat_path, R_ap=150*u.um, L_det=350*u.cm, oshape=(21, 21),
                       mag = mag)
         
 

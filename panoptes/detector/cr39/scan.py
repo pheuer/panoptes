@@ -1046,9 +1046,9 @@ if __name__ == '__main__':
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
     #data_dir = os.path.join('//expdiv','kodi','ShotData')
     #data_dir = os.path.join('\\\profiles','Users$','pheu','Desktop','data_dir')
-    data_dir = os.path.join("C:\\","Users","pheu","Data","data_dir")
+    #data_dir = os.path.join("C:\\","Users","pheu","Data","data_dir")
     
-    data_path = os.path.join(data_dir, '103955', 'OM220830_105521_PR2771.cpsa')
+    data_path = os.path.join(data_dir, '103955', '103955_TIM5_PR3148_2h_s7_20x.cpsa')
     
     obj = Scan(data_path, verbose=True)
     
@@ -1072,15 +1072,10 @@ if __name__ == '__main__':
 
     #obj.cli()
     
-    """
     path = os.path.join(os.getcwd(), 'testcr39.h5')
     print(path)
     obj.save(path)
-    
-    c2 = CR39(103955, data_dir=data_dir, subsets=path)
-    print(c2.subsets)
-    """
-        
+
         
         
         

@@ -20,29 +20,15 @@ from panoptes.util.misc import identify_filetype
 
 
 
-class XrayDetector2D(Data2D):
-    def __init__(self, *args):
-        super().__init__(*args)
-        
-        
-class XrayIP(XrayDetector2D):
+class XrayIP(Data2D):
     
-    def __init__(self, filepath):
+    def __init__(self, *args, **kwargs):
         
         # Frst initialize the empty parent class
-        super().__init__()
-        
-        self.path = filepath
-        
-        # If an hdf4 file is given, require and run the conversion utility
-        # TODO: Use lotus to get an h5 natively so we can skip this conversion
-        # kerfuffle 
-        self.path = ensure_hdf5(self.path)
-        
-            
+        super().__init__(*args, **kwargs)
+     
         # Check if the file is Data object or some other data file based
         # on the keywords within it
- 
         filetype = identify_filetype(self.path)
             
         if filetype == self.__class__.__name__:
@@ -61,6 +47,11 @@ class XrayIP(XrayDetector2D):
         """
         Reads data from an OMEGA xray image plate scan file
         """
+        
+        # If an hdf4 file is given, require and run the conversion utility
+        # TODO: Use lotus to get an h5 natively so we can skip this conversion
+        # kerfuffle 
+        self.path = ensure_hdf5(self.path)
         
         print("Loading Xray data")
         with h5py.File(self.path, 'r') as f:

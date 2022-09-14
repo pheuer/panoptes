@@ -82,14 +82,17 @@ class PIX(Diagnostic):
                     
     def _save(self, grp):
         super()._save(grp)
+        
+        
+        datagrp = grp.create_group('data')
         if self.data is not None:
-            self.data.save(grp)
+            self.data.save(datagrp)
         
             
     def _load(self, grp):
         super()._load(grp)
         if 'data' in grp.keys():
-            self.data = PenumbralImage(grp)
+            self.data = PenumbralImage(grp['data'])
         
         
     def plot_pinholes(self):
@@ -105,10 +108,10 @@ if __name__ == '__main__':
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
     
-    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
+    #data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
     
     
-    data_path = os.path.join(data_dir, '103955', 'pcis_s103955_pcis1_-1-[phosphor].hdf' )
+    data_path = os.path.join(data_dir, '103955', 'PCIS-s103955_pcis1_-1-[phosphor].h5' )
     save_path = os.path.join(data_dir, '103955', 'result5.h5')
     tmat_path = os.path.join(data_dir, '103955', 'tmat3.h5')
     
@@ -138,10 +141,6 @@ if __name__ == '__main__':
         
         obj.save(save_path)
         
-    print(type(obj))
-    print(type(obj.data))
-    print(type(obj.data.pinholes))
-    
     if obj.data.stack is None:
         obj.data.stack_pinholes()
         obj.save(save_path)
@@ -154,7 +153,7 @@ if __name__ == '__main__':
         
     
     if obj.data.reconstruction is None:
-        obj.data.reconstruct( tmat_path)
+        obj.data.reconstruct( tmat_path, 50)
         obj.save(save_path)
         
         
