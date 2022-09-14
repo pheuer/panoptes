@@ -101,14 +101,14 @@ def test_initalizing_with_arguments():
 """
     
    
-def test_set_constants_warning():
+def test_set_constants_warning_or_error():
     """
     Validate that a warning is raised if dxo*mag<dxi
     """
     ishape= (201, 201)
-    oshape=(31,31)
+    oshape=(201,201)
     
-    mag = 10
+    mag = 120
     R_ap = 50*u.um
     xo = np.linspace(-0.015, 0.015, num=oshape[0])*u.cm / R_ap
     yo=np.linspace(-0.015, 0.015, num=oshape[1])*u.cm / R_ap
@@ -120,6 +120,10 @@ def test_set_constants_warning():
     tmat = TransferMatrix()
     
     with pytest.warns():
+        tmat.set_constants(xo=xo, yo=yo, xi=xi, yi=yi, mag=mag,
+                                   ap_xy=ap_xy, override_validation=True)
+    
+    with pytest.raises(ValueError):
         tmat.set_constants(xo=xo, yo=yo, xi=xi, yi=yi, mag=mag,
                                    ap_xy=ap_xy)
         
@@ -249,7 +253,7 @@ class TestSingleApertureTmat1:
 
 if __name__ == '__main__':
     tmp_path = os.path.join(os.getcwd(), 'tmat3.h5')
-    x = TestSingleApertureTmat1(tmp_path)
+    #x = TestSingleApertureTmat1(tmp_path)
     
-    test_set_constants_warning()
+    test_set_constants_warning_or_error()
     

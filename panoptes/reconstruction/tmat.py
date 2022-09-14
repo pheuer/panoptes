@@ -140,6 +140,43 @@ class TransferMatrix(BaseObject):
     def nyi(self):
         return self.yi.size
     
+    
+    @property
+    def dxo(self):
+        return np.mean(np.gradient(self.xo))
+    @property
+    def dyo(self):
+        return np.mean(np.gradient(self.yo))
+    @property
+    def dxi(self):
+        return np.mean(np.gradient(self.xi))
+    @property
+    def dyi(self):
+        return np.mean(np.gradient(self.yi))
+    
+    
+    @property
+    def xo_scaled(self):
+        self._check_units_set()
+        return self.xo*self.R_ap
+
+    @property
+    def yo_scaled(self):
+        self._check_units_set()
+        return self.yo*self.R_ap
+
+
+    @property
+    def xi_scaled(self):
+        self._check_units_set()
+        return self.xi*self.R_ap*self.mag
+ 
+    @property
+    def yi_scaled(self):
+        self._check_units_set()
+        return self.yi*self.R_ap*self.mag
+    
+    
     @property
     def oshape(self):
         return (self.xo.size, self.yo.size)
@@ -230,51 +267,29 @@ class TransferMatrix(BaseObject):
         Optional: 
             psf, psf_ax
                 Default: tophat function at R_ap
-            
+                
+        If xo (or same for yo) is an np.ndarrays of length 2, then they will 
+        be interpreted as min(xo), max(xo) and xo will be generated
+        as np.arange(min(xo), min(yo), dxo) with dxo = dxi/mag
         
         """
+        
+        
+        # Calculate psf and psf_ax if not provided
+        if psf_ax is None:
+            psf = np.concatenate((np.ones(50), np.zeros(50)))
+            psf_ax = np.linspace(0, 2, num=100)
+            
+        if psf_ax is None:
+            raise ValueError("If psf is provided, psf_ax is required.")
+            
+            
         error_list = []
         attrs = {'xo':xo, 'yo':yo, 'xi':xi, 'yi':yi,
                    'mag':mag, 'ap_xy':ap_xy, 'psf':psf,
                    'psf_ax':psf_ax}
-        
-        
-        # Validate that dxo*mag <= dxi
-        # If this condition is not satisfied, the TransferMatrix is
-        # including spurious resolution in the object plane
-        dxo = np.mean(np.gradient(xo))
-        dyo = np.mean(np.gradient(yo))
-        dxi = np.mean(np.gradient(xi))
-        dyi = np.mean(np.gradient(yi))
-        valid = (dxo*mag <= dxi) and (dyo*mag <= dyi)
-        
-        if not valid:
-            warnings.warn("Warning: constants are invalid, violating "
-                          "dxo*mag < dxi")
-            
-            if not override_validation:
-                warnings.warn("Modifying dxo and dyo to satisfy dxo*mag<dxi")
-                
-                dxo = dxi/mag
-                dyo = dyi/mag
-                xo = np.arange(np.min(xo), np.max(xo), dxo)
-                yo = np.arange(np.min(yo), np.max(yo), dyo)
-            else:
-                warnings.warn("OVERRIDE VALIDATION FLAG SET: TMAT WILL HAVE"
-                              "SPURIOUS OBJECT PLANE RESOLUTION.")
-
-        
-        # Calculate psf and psf_ax if not provided
-        if attrs['psf_ax'] is None:
-            attrs['psf'] = np.concatenate((np.ones(50), np.zeros(50)))
-            attrs['psf_ax'] = np.linspace(0, 2, num=100)
-            
-        if attrs['psf_ax'] is None:
-            raise ValueError("If psf is provided, psf_ax is required.")
             
         for key, val in attrs.items() :
-            
-            
             # If a u.Quantity is given, try to convert it to a 
             # dimensionless np.ndarray
             if isinstance(val, u.Quantity):
@@ -298,6 +313,49 @@ class TransferMatrix(BaseObject):
             
             for key, val in attrs.items():
                 setattr(self, key, val)
+                
+        # If xo or yo is only size (2), assume they are min, max
+        # values and expand
+        if self.xo.size == 2:
+            dxo = (self.dxi/self.mag)
+            if dxo > np.abs(xo[1] - xo[0]):
+                raise ValueError(f"Given xo bounds ({self.xo}) are too small "
+                                 f" for resolution dxo={dxo}")
+            else:
+                # Add 1% to dxo so that we satisfy the validity condition
+                # without issues with numerical precision.
+                self.xo = np.arange(xo[0], xo[1], 1.01*dxo)
+            
+        if self.yo.size == 2:
+            dyo = (self.dyi/self.mag)
+            if dyo > np.abs(yo[1] - yo[0]):
+                raise ValueError(f"Given yo bounds ({self.yo}) are too small "
+                                 f" for resolution dyo={dyo}")
+            else:
+                self.yo = np.arange(yo[0], yo[1], 1.01*dyo)
+            
+             
+        # Validate that dxo*mag <= dxi
+        # If this condition is not satisfied, the TransferMatrix is
+        # including spurious resolution in the object plane
+
+        valid = ( (self.dxo*self.mag <= self.dxi) and 
+                     (self.dyo*self.mag <= self.dyi) )
+         
+        if not valid:
+            if override_validation:
+                 
+                warnings.warn("Warning: constants are invalid, violating "
+                               "dxo*mag < dxi. Resulting transfer matrix will "
+                               "have spurious object plane resolution.")
+            else:
+                    raise ValueError("Constants are invalid, violating "
+                                   "dxo*mag < dxi"
+                                   f"({self.dxo*self.mag} > {self.dxi}")
+            
+            
+            
+        
     
 
     
@@ -339,26 +397,7 @@ class TransferMatrix(BaseObject):
         
         
 
-    @property
-    def xo_scaled(self):
-        self._check_units_set()
-        return self.xo*self.R_ap
-
-    @property
-    def yo_scaled(self):
-        self._check_units_set()
-        return self.yo*self.R_ap
-
-
-    @property
-    def xi_scaled(self):
-        self._check_units_set()
-        return self.xi*self.R_ap*self.mag
- 
-    @property
-    def yi_scaled(self):
-        self._check_units_set()
-        return self.yi*self.R_ap*self.mag
+    
     
     
 
@@ -505,12 +544,12 @@ if __name__ == '__main__':
     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     
     data_dir = os.path.join("C:\\","Users","pvheu","Desktop","data_dir")
-    data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
+    #data_dir = os.path.join('C:\\','Users','pheu','Data','data_dir')
     
     save_path = os.path.join(data_dir, '103955', 'tmat.h5')
    
-    isize=100
-    osize=20
+    isize=101
+    osize=101
     
     import numpy as np
     import time
@@ -518,21 +557,22 @@ if __name__ == '__main__':
     mag = 30
     R_ap = 150*u.um
     
-    xo = np.linspace(-0.015, 0.015, num=osize)*u.cm / R_ap
-    yo=np.linspace(-0.015, 0.015, num=osize)*u.cm / R_ap
-    xi = np.linspace(-0.6,0.6, num=isize)*u.cm / R_ap / mag
-    yi=np.linspace(-0.6,0.6, num=isize)*u.cm / R_ap / mag
+
+
+    xi = np.linspace(-1, 1, num=isize)*u.cm / R_ap / mag
+    yi= np.linspace(-1, 1, num=isize)*u.cm / R_ap / mag
+    
+    oscale = 0.01
+    xo = np.array([-oscale, oscale])
+    yo= np.array([-oscale, oscale])
     
     ap_xy = np.array([[0,0]])*u.cm / R_ap
-    
-    psf = np.concatenate((np.ones(50), np.zeros(50)))
-    psf_ax = np.linspace(0, 2*R_ap, num=100) / R_ap
-    
     
     t = TransferMatrix()
     
     
-    t.set_constants(xo, yo, xi, yi, mag, ap_xy, psf=psf, psf_ax=psf_ax)
+    t.set_constants(xo=xo, yo=yo, xi=xi, yi=yi, 
+                    mag=mag, ap_xy=ap_xy)
     
     t.save(save_path)
 
@@ -549,7 +589,7 @@ if __name__ == '__main__':
         tmat = f['tmat'][...]
 
     
-    xarr, yarr = np.meshgrid(xo.value, yo.value, indexing='ij')
+    xarr, yarr = np.meshgrid(t.xo, t.yo, indexing='ij')
 
     
     r = np.sqrt(xarr**2 + yarr**2).flatten()
