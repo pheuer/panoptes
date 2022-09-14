@@ -6,4 +6,9 @@ Created on Fri Nov 19 11:24:21 2021
 """
 import os
 
-_root_dir = os.path.dirname(__file__)
+__all__ = [
+    "base",
+    "cli",
+    "hdf",
+    "misc",
+]

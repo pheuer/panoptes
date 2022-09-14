@@ -7,9 +7,8 @@ import h5py
 from abc import ABC
 
 
-import panoptes
-from panoptes.util.misc import identify_filetype
 
+from panoptes.util.misc import identify_filetype
 
 
 class BaseObject(ABC):
@@ -178,4 +177,5 @@ class BaseObject(ABC):
         
         else:
             raise ValueError(f"Invalid path of type {type(path)}: {path}")
+        
         

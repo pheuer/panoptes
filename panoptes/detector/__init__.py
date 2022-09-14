@@ -1,3 +1,7 @@
 import os
 
-root_dir = os.path.dirname(__file__)
+__all__ = [
+    "cr39",
+    "detector",
+    "xray",
+]

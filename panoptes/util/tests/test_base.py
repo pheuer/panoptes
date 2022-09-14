@@ -19,5 +19,3 @@ if __name__ == '__main__':
     obj.save()
 
     obj2 = BaseObject(path=tmp_path)
-    
-    
