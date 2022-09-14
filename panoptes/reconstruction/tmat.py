@@ -12,11 +12,13 @@ from panoptes.util.base import BaseObject
 
 from cached_property import cached_property
 
+import warnings
+
 
 
 class TransferMatrix(BaseObject): 
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         """
         Represents a transfer matrix between the object and image plane
         of a pinhole or penumbral imager.
@@ -95,12 +97,7 @@ class TransferMatrix(BaseObject):
             
         
         """
-        super().__init__()
         
-        # Constants
-        # xo,yo,xi,yi are stored as private attributes because their public
-        # attributes will return the subset including any limits. 
-        # if no subset is set, _xo = xo etc.
         self.xo = None
         self.yo = None
         self.xi = None
@@ -110,30 +107,24 @@ class TransferMatrix(BaseObject):
         self.psf = None
         self.psf_ax = None
         
-        
-        # Dimensions
         self.R_ap = None
         self.L_det = None
+        
+        super().__init__()
+        
 
-        self.path = None
-        
-        
         if len(args)==0:
             pass
         elif len(args) == 1:
             self.path = args[0]
             self.load(self.path)
-        
-        elif len(args) == 8:
-            self.set_constants(*args)
-
-        elif len(args) == 10:
-            self.set_constants(*args[:8])
-            self.set_dimensions(*args[8:])
-
-
         else:
             raise ValueError(f"Invalid number of parameters: {len(args)}")
+            
+            
+            
+        
+   
             
             
     @property
@@ -224,15 +215,63 @@ class TransferMatrix(BaseObject):
             self.L_det = grp['L_det'][...] * u.cm
 
 
-    def set_constants(self, xo, yo, xi, yi, mag, ap_xy, 
-                      psf, psf_ax):
+    def set_constants(self, *, xo, yo, xi, yi, 
+                      mag, ap_xy, psf=None, psf_ax=None,
+                      override_validation=False, **kwargs):
         """
         Set the constants that define the transfer matrix. 
+        
+        Paramters (all specified as keyword paramters). See TransferMatrix
+        docstring. 
+        
+        
+        Required: xo, yo, xi, yi, mag, ap_xy
+        
+        Optional: 
+            psf, psf_ax
+                Default: tophat function at R_ap
+            
+        
         """
         error_list = []
         attrs = {'xo':xo, 'yo':yo, 'xi':xi, 'yi':yi,
                    'mag':mag, 'ap_xy':ap_xy, 'psf':psf,
                    'psf_ax':psf_ax}
+        
+        
+        # Validate that dxo*mag <= dxi
+        # If this condition is not satisfied, the TransferMatrix is
+        # including spurious resolution in the object plane
+        dxo = np.mean(np.gradient(xo))
+        dyo = np.mean(np.gradient(yo))
+        dxi = np.mean(np.gradient(xi))
+        dyi = np.mean(np.gradient(yi))
+        valid = (dxo*mag <= dxi) and (dyo*mag <= dyi)
+        
+        if not valid:
+            warnings.warn("Warning: constants are invalid, violating "
+                          "dxo*mag < dxi")
+            
+            if not override_validation:
+                warnings.warn("Modifying dxo and dyo to satisfy dxo*mag<dxi")
+                
+                dxo = dxi/mag
+                dyo = dyi/mag
+                xo = np.arange(np.min(xo), np.max(xo), dxo)
+                yo = np.arange(np.min(yo), np.max(yo), dyo)
+            else:
+                warnings.warn("OVERRIDE VALIDATION FLAG SET: TMAT WILL HAVE"
+                              "SPURIOUS OBJECT PLANE RESOLUTION.")
+
+        
+        # Calculate psf and psf_ax if not provided
+        if attrs['psf_ax'] is None:
+            attrs['psf'] = np.concatenate((np.ones(50), np.zeros(50)))
+            attrs['psf_ax'] = np.linspace(0, 2, num=100)
+            
+        if attrs['psf_ax'] is None:
+            raise ValueError("If psf is provided, psf_ax is required.")
+            
         for key, val in attrs.items() :
             
             
@@ -247,9 +286,7 @@ class TransferMatrix(BaseObject):
 
             elif not isinstance(val, (np.ndarray, float, int)):
                 error_list.append(f"{key} ({type(val)})")
-                
-            
-                    
+                      
         if len(error_list) > 0:
             raise ValueError("All constant arguments must be dimensionless "
                              "u.Quantity arrays,"
@@ -264,7 +301,7 @@ class TransferMatrix(BaseObject):
     
 
     
-    def set_dimensions(self, R_ap, L_det):
+    def set_dimensions(self, R_ap=None, L_det=None, **kwargs):
         """
         Parameters
         ----------
@@ -278,11 +315,15 @@ class TransferMatrix(BaseObject):
         """
         if isinstance(R_ap, u.Quantity):
             self.R_ap = R_ap.to(u.um)
+        elif R_ap is None:
+            self.R_ap = None
         else:
             raise ValueError("R_ap must be a u.Quantity with units of length")
             
         if isinstance(L_det, u.Quantity):
             self.L_det = L_det.to(u.cm)
+        elif L_det is None:
+            self.L_det = None
         else:
             raise ValueError("L_det must be a u.Quantity with units of length")
         
@@ -320,17 +361,6 @@ class TransferMatrix(BaseObject):
         return self.yi*self.R_ap*self.mag
     
     
-    
-    
-    def validate(self):
-        """
-        Test whether dxo*mag < dxi
-
-        """
-        
-        pass
-    
-    
 
     def calculate_tmat(self, path=None):
         """
@@ -341,7 +371,7 @@ class TransferMatrix(BaseObject):
         if path is not None:
             self.path = path
     
-        # Start by saving the paramters of the tmat
+        # Start by saving the paramters of the tmat to the path
         self.save(self.path)
 
     

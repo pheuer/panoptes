@@ -515,8 +515,7 @@ class PenumbralImage(PinholeArrayImage):
         if mag is None:
             mag = float(self.pinholes.mag_r)
         
-        psf = np.concatenate((np.ones(50), np.zeros(50)))
-        psf_ax = np.linspace(0, 2*R_ap, num=100)/R_ap
+        
         
         xi = self.stack.xaxis/ R_ap /mag
         yi = self.stack.yaxis/ R_ap / mag
@@ -527,23 +526,17 @@ class PenumbralImage(PinholeArrayImage):
         yi = yi[::c]
         
         
-        tmat = TransferMatrix(xo.to(u.dimensionless_unscaled).value,
-                              yo.to(u.dimensionless_unscaled).value,
-                              xi.to(u.dimensionless_unscaled).value,
-                              yi.to(u.dimensionless_unscaled).value,
-                              mag,
-                              ap_xy.to(u.dimensionless_unscaled).value,
-                              psf,
-                              psf_ax.to(u.dimensionless_unscaled).value,
-                              R_ap, 
-                              L_det)
+        self.tmat = TransferMatrix()
+        self.tmat.set_constants(xo=xo.to(u.dimensionless_unscaled).value,
+                              yo=yo.to(u.dimensionless_unscaled).value,
+                              xi=xi.to(u.dimensionless_unscaled).value,
+                              yi=yi.to(u.dimensionless_unscaled).value,
+                              mag=mag,
+                              ap_xy=ap_xy.to(u.dimensionless_unscaled).value,)
+        self.tmat.set_dimensions(R_ap=R_ap, 
+                            L_det=L_det)
         
-        
-    
-        tmat.calculate_tmat(tmat_path)
-        
-        self.tmat = tmat
-            
+        self.tmat.calculate_tmat(tmat_path)
     
     
     def reconstruct(self, tmat_path, iterations):
