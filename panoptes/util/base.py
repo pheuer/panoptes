@@ -31,10 +31,13 @@ class BaseObject(ABC):
     
     """
     
-    def __init__(self, *args, path=None, group='/', **kwargs):
+    def __init__(self, *args, path=None, group=None, **kwargs):
         
         self.path = path
-        self.group = group
+        if group is None:
+            self.group = '/'
+        else:
+            self.group = group
         
         if self.path is not None and os.path.isfile(self.path):
             # The name of a BaseObject class is saved as an attribute of 
