@@ -6,6 +6,12 @@ import os
 import h5py
 from abc import ABC
 
+
+import panoptes
+from panoptes.util.misc import identify_filetype
+
+
+
 class BaseObject(ABC):
     """
     An object with properties that are savable to an HDF5 file or a group
@@ -14,14 +20,30 @@ class BaseObject(ABC):
     The _save and _load methods need to be extended in child classes
     to define exactly what is being loaded and/or saved.
     
+    
+    Paramters 
+    
+    path : str (optional)
+    
+    group : str (optional)
+        The group within the h5 file where this is stored.
+        Defaults to the root group
+    
     """
     
-    def __init__(self, **kwargs):
-        # The path to the file
-        self.path = None
-        # The group within the h5 file where this is stored.
-        # Defaults to the root group
-        self.group = '/'
+    def __init__(self, *args, path=None, group='/', **kwargs):
+        
+        self.path = path
+        self.group = group
+        
+        if self.path is not None and os.path.isfile(self.path):
+            # The name of a BaseObject class is saved as an attribute of 
+            # its root group
+            # If the filetype matches the class name, load the group
+            filetype = identify_filetype(self.path)
+            if filetype == self.__class__.__name__:
+                self.load(self.path, self.group)
+            
     
     
     def _save(self, grp):
@@ -47,10 +69,23 @@ class BaseObject(ABC):
         pass
     
     
-    def save(self, path, group=None):
+    def save(self, *args):
         """
         Save this object to an h5 file or group within an h5 file
         """ 
+        path = self.path
+        group = self.group
+        if len(args)==0:
+            pass
+        elif len(args)==1:
+            path = args[0]
+        elif len(args)==2:
+            path = args[0]
+            group= args[1]
+        else:
+            raise ValueError("Invalid number of arguments: {len(args)}")
+        
+        
         
         if isinstance(path, h5py.File):
             self.path = path.filename
@@ -86,10 +121,22 @@ class BaseObject(ABC):
             
 
 
-    def load(self, path, group='/'):
+    def load(self, *args):
         """
         Load this object from a file
         """
+        path = self.path
+        group = self.group
+        if len(args)==0:
+            pass
+        elif len(args)==1:
+            path = args[0]
+        elif len(args)==2:
+            path = args[0]
+            group= args[1]
+        else:
+            raise ValueError("Invalid number of arguments: {len(args)}")
+        
         
         if isinstance(path, h5py.File):
             self.path = path.filename
@@ -128,5 +175,4 @@ class BaseObject(ABC):
         
         else:
             raise ValueError(f"Invalid path of type {type(path)}: {path}")
-            
-  
+        
