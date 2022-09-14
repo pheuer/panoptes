@@ -785,67 +785,7 @@ class Scan(BaseObject):
             else:
                 print(f"Invalid input: {x}")
                 
-                
-                
-                
-                
-    def stack(self, xy, width):
-        """
-        Stack the track data
-        
-        Any track that is within one of the stacking zones will have the center
-        of the at zone subtracted from it. 
-        
-        Any track that is not within one of the stacking zones will be removed.
-
-        Parameters
-        ----------
-        xy : np.ndarray [npoints, 2]
-            Centers of the regions to stack
-        width : float or tuple of two floats
-            Width of the region to stack (in units of xaxis, yaxis)
-
-        Returns
-        -------
        
-        trackdata : np.ndarray [ntracks, 6]
-        
-            The track data now stacked. 
-            
-
-        """
-        
-        # NOTE: the problem with this function is it doesn't deal well
-        # with partial aperture images...it will just think there is more
-        # signal there.
-        
-        n_ap = xy.shape[0]
-        
-        trackdata = np.copy(self.trackdata)
-        
-        keep_ind = np.zeros(self.ntracks)
-        for i in range(n_ap):
-            
-            # Find the tracks within one width of this point
-            t = (np.abs(trackdata[:,0]-xy[i,0]) < width and
-                 np.abs(trackdata[:,1]-xy[i,1]) < width)
-            
-            # Subtract this point from their position
-            trackdata[t, 0] += -xy[i,0]
-            trackdata[t, 1] += -xy[i,1]
-            
-            # Add those tracks to the list of tracks to keep
-            keep_ind += t
-            
-        # Discard tracks that were not hit by any of the aperture boxes
-        trackdata = trackdata[t.astype(bool),:]
-        
-        return trackdata
-            
-        
-        
-                
-                
 
     def plot(self, axes=('X', 'Y'), log=False, clear=False, 
              xrange=None, yrange=None, zrange=None, 
