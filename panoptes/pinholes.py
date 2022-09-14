@@ -844,7 +844,8 @@ class PinholeArray(BaseObject):
         
 
         
-    def stack(self, xaxis, yaxis, data, width=None):
+    def stack(self, xaxis, yaxis, data, width=None,
+              extend=False):
         """
         Stack the data from the selected pinholes
         
@@ -860,6 +861,13 @@ class PinholeArray(BaseObject):
         auto_select_apertures : bool, optional
             If True, automatically select the apertures for the fit and skip
             asking for user input.
+            
+            
+        extend : bool or float
+            If extend is True, extend the stacked image using values drawn
+            from the noise regions of the data. Default is to expand the
+            area by 50% on each side (extend=2). If extend is an integer,
+            that will be used as the expansion factor.
         
         """
         
@@ -931,24 +939,24 @@ class PinholeArray(BaseObject):
         
         
         
-        
-        # TODO: Add keywords for the cutoff radius (default determine from the
-        # pinhole radius) and the pad factor.
-        # but this seems to work!
-        r = np.sqrt(xaxis**2 + yaxis**2)
-        noise = output[r > 0.5].flatten()
-        
-        
-        expfact = 2
-        out2 = np.random.choice(noise, replace=True, size=expfact**2*4*wx*wy)
-        out2 = np.reshape(out2, (expfact*2*wx, expfact*2*wy))
-        
-        out2[(expfact-1)*wx:(expfact+1)*wx, 
-             (expfact-1)*wy:(expfact+1)*wy] = output
-        output = out2
-        
-        xaxis = np.linspace(-expfact*width/2, expfact*width/2, expfact*2*wx)
-        yaxis = np.linspace(-expfact*width/2, expfact*width/2, expfact*2*wy)
+        if extend:
+            # TODO: Add keywords for the cutoff radius (default determine from the
+            # pinhole radius) and the pad factor.
+            # but this seems to work!
+            r = np.sqrt(xaxis**2 + yaxis**2)
+            noise = output[r > 0.5].flatten()
+            
+            
+            expfact = 2
+            out2 = np.random.choice(noise, replace=True, size=expfact**2*4*wx*wy)
+            out2 = np.reshape(out2, (expfact*2*wx, expfact*2*wy))
+            
+            out2[(expfact-1)*wx:(expfact+1)*wx, 
+                 (expfact-1)*wy:(expfact+1)*wy] = output
+            output = out2
+            
+            xaxis = np.linspace(-expfact*width/2, expfact*width/2, expfact*2*wx)
+            yaxis = np.linspace(-expfact*width/2, expfact*width/2, expfact*2*wy)
 
         
         return xaxis, yaxis, output
