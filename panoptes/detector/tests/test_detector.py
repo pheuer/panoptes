@@ -24,11 +24,11 @@ def test_data2d_withunits(path):
     yaxis = xaxis
     data = np.random.random((10,10)) * u.T
     
-    obj = Data2D(xaxis, yaxis, data)
+    obj = Data2D(xaxis, yaxis, data, path=path)
     
     obj.save(path)
     
-    obj2 = Data2D(path)
+    obj2 = Data2D(path=path)
     
     assert obj2.xaxis.unit == xaxis.unit
     assert np.allclose(obj2.data.value, data.value)
@@ -43,13 +43,12 @@ def test_data2d_withoutunits(path):
     yaxis = xaxis
     data = np.random.random((10,10))
     
-    obj = Data2D(xaxis, yaxis, data)
+    obj = Data2D(xaxis, yaxis, data, path=path)
     
     obj.save(path)
     
-    obj2 = Data2D(path)
+    obj2 = Data2D(path=path)
     
-
     assert np.allclose(obj2.data, data)
 
 

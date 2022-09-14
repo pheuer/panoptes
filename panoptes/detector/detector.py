@@ -27,21 +27,29 @@ from panoptes.reconstruction.gelfgat import gelfgat_poisson, GelfgatResult
 
 class Data(BaseObject):
     
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         
         self.data = None
         
-        super().__init__()
+        # Pass kwargs to subclass in case it contains path or group
+        super().__init__(**kwargs)
         
         if len(args) == 0:
             pass
+            
         # If one argument is passed, assume it is a data array OR a filepath
         # to a object of this type that we can load
         elif len(args) == 1:
-            if isinstance(args[0], (np.ndarray, u.Quantity)):
+            if isinstance(args[0], (np.ndarray, u.Quantity, type(None))):
                 self.data = args[0]
             else:
-                self.load(args[0])
+                raise ValueError(f"Invalid data type: {type(args[0])}")
+                
+        else:
+            raise ValueError(f"Invalid number of paramters for class "
+                             f"{self.__class__.__name__}:"
+                             f"{len(args)}")
+                
                 
     def _save(self, grp):
         
@@ -83,30 +91,33 @@ class Data(BaseObject):
         
 class Data1D(Data):
     
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         
         self.xaxis = None
         
-        # Default all to None
-        super().__init__()
-        
-        
-
         # If no arguements are passed, leave as None
         if len(args)==0:
-            pass
-        # If one argument is passed, assume it is a data array OR a filepath
-        # to a object of this type that we can load
-        elif len(args)==1:
-            super().__init__(args[0])
-        # If two arguments are passed, assume they are xaxis and data
-        elif len(args)==2:
-            self.xaxis = args[0]
-            self.data = args[1]
+            super().__init__(**kwargs)
+            
         else:
-            raise ValueError(f"Invalid number of paramters for class "
-                             f"{self.__class__.__name__}:"
-                             f"{len(args)}")
+            xaxis = None
+            data = None
+            
+            # If one argument is passed, assume it is a data array OR a filepath
+            # to a object of this type that we can load
+            if len(args)==1:
+                data = args[0]
+            # If two arguments are passed, assume they are xaxis and data
+            elif len(args)==2:
+                xaxis = args[0]
+                data = args[1]
+            else:
+                raise ValueError(f"Invalid number of paramters for class "
+                                 f"{self.__class__.__name__}:"
+                                 f"{len(args)}")
+             
+            self.xaxis = xaxis
+            super().__init__(data, **kwargs)
             
             
     def _save(self, grp):
@@ -171,29 +182,36 @@ class Data1D(Data):
 
 class Data2D(Data1D):
     
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         
         self.yaxis = None
         
-        # Default all to None
-        super().__init__()
-        
-        
         # If no arguments are passed, leave it all as None
         if len(args)==0:
-            pass
-        # If one argument is passed, assume it is a filepath to a saved 
-        # copy of this object or data array
-        elif len(args)==1:
-            super().__init__(args[0])
-        # If three arguments are passed, assume they are x, y, and data
-        elif len(args)==3:
-            super().__init__(args[0], args[2]) 
-            self.yaxis = args[1]
-        else:
-            raise ValueError("Invalid number of paramters for class Data2D: "
-                             f" {len(args)}")
+            # Pass kwargs to superclass in case it contains path or group
+            super().__init__(**kwargs)
             
+        else:
+            
+            data = None
+            xaxis = None
+            yaxis = None
+            # If one argument is passed, assume it is the data array
+            if len(args)==1:
+                data = args[0]
+            # If three arguments are passed, assume they are x, y, and data
+            elif len(args)==3:
+                xaxis = args[0]
+                yaxis = args[1]
+                data = args[2]
+            else:
+                raise ValueError(f"Invalid number of paramters for class Data2D: "
+                                 f" {len(args)}")
+            
+            self.yaxis = yaxis
+            super().__init__(xaxis, data, **kwargs)
+        
+        
     def _save(self, grp):
         
         # Save the xaxis and data using the parent Data1D method
@@ -209,8 +227,6 @@ class Data2D(Data1D):
                 grp['yaxis'] = self.yaxis
                 grp['yaxis'].attrs['unit'] = ''
             
-        
-        
         
     def _load(self, grp):
         
@@ -292,10 +308,7 @@ class Data2D(Data1D):
             
         return  fig, ax
         
-        
-        
-    
-        
+
     def select_subregion(self):
          """
          Select a subregion of the data
@@ -442,11 +455,11 @@ class PinholeArrayImage(Data2D):
         fig, ax = self.plot(*args, show=False)
         
         if self.pinholes is not None:
-            ax.scatter(self.pinholes.xy[self.pinholes.use_for_fit,0], 
-                       self.pinholes.xy[self.pinholes.use_for_fit,1], color='green')
+            ax.scatter(self.pinholes.xy[self.pinholes.use,0], 
+                       self.pinholes.xy[self.pinholes.use,1], color='green')
             
-            ax.scatter(self.pinholes.xy[~self.pinholes.use_for_fit,0], 
-                       self.pinholes.xy[~self.pinholes.use_for_fit,1], color='red')
+            ax.scatter(self.pinholes.xy[~self.pinholes.use,0], 
+                       self.pinholes.xy[~self.pinholes.use,1], color='red')
             
         plt.show()
             
@@ -521,7 +534,7 @@ class PenumbralImage(PinholeArrayImage):
         yi = self.stack.yaxis/ R_ap / mag
         
         
-        c = 1
+        c = 6
         xi = xi[::c]
         yi = yi[::c]
         
@@ -547,7 +560,7 @@ class PenumbralImage(PinholeArrayImage):
         
         print("Do reconstruction")
         
-        c=1
+        c=6
         data = self.stack.data[::c, ::c] 
         
         self.reconstruction = gelfgat_poisson(data.flatten(), tmat, iterations, h_friction=3)
